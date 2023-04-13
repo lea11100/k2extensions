@@ -8,7 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace k2extensions
+namespace k2extensionsLib
 {
     internal class AdjacencyMatrix
     {
@@ -65,9 +65,9 @@ namespace k2extensions
         /// Stores cells one by one. A cell is labelLength many bits wide
         /// </summary>
         private BitArray data { get; }
-        private int numberRows { get; }
-        private int numberCols { get; }
-        private int labelLength { get; }
+        public int numberRows { get; }
+        public int numberCols { get; }
+        public int labelLength { get; }
 
         public AdjacencyMatrixWithLabels(BitArray data, int numberRows, int numberCols, int labelLength)
         {
@@ -133,17 +133,132 @@ namespace k2extensions
 
     }
 
-    internal class RdpEntry
+    internal class RdfEntry
     {
         public string Subject { get; set; }
         public string Object { get; set; }
         public string Predicate { get; set; }
 
-        public RdpEntry(string s, string p, string o)
+        public RdfEntry(string s, string p, string o)
         {
             Subject = s;
             Object = o;
             Predicate = p;
+        }
+    }
+
+    internal class DynamicBitArray : IList<bool>
+    {
+        BitArray data { get; set; } = new BitArray(128, false);
+        int lastIndex { get; set; } = 0;
+
+        public bool this[int index] { get => data[index]; set => data[index] = value; }
+
+        public int Count => data.Count;
+
+        public bool IsReadOnly => data.IsReadOnly;
+
+        public void Add(bool item)
+        {
+            if (lastIndex >= data.Count)
+                data.Length += 128;
+            data[lastIndex] = item;
+            lastIndex++;
+        }
+
+        public void AddRange(BitArray array)
+        {
+            for (int i = 0; i < array.Length; i++)
+            {
+                Add(array[i]);
+            }
+        }
+
+        public void Clear()
+        {
+            data = new BitArray(128, false);
+            lastIndex = 0;
+        }
+
+        public bool Contains(bool item)
+        {
+            return data.Cast<bool>().Contains(item);
+        }
+
+        public void CopyTo(bool[] array, int arrayIndex)
+        {
+            data.CopyTo(array, arrayIndex);
+        }
+
+        public IEnumerator<bool> GetEnumerator()
+        {
+            return data.Cast<bool>().GetEnumerator();
+        }
+
+        public int IndexOf(bool item)
+        {
+            return data.Cast<bool>().ToList().IndexOf(item);
+        }
+
+        public void Insert(int index, bool item)
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool Remove(bool item)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void RemoveAt(int index)
+        {
+            throw new NotImplementedException();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return data.GetEnumerator();
+        }
+
+        public BitArray GetFittedArray()
+        {
+            shrink();
+            return data;
+        }
+
+        private void shrink()
+        {
+            data.Length = lastIndex;
+        }
+    }
+
+    internal interface k2Extension
+    {
+        RdfEntry[] prec(string o);
+        RdfEntry[] succ(string s);
+        RdfEntry[] decomp();
+        RdfEntry[] allEdgesOfType(string p);
+        RdfEntry[] connections(string s, string o);
+        RdfEntry[] precOfType(string o, string p);
+        RdfEntry[] succOfType(string s, string p);
+        bool exists(string s, string p, string o);
+    }
+
+    internal static class GeneralExtensions
+    {
+        internal static int rank1(this BitArray array, int index)
+        {
+            int result = array.Cast<bool>().Take(index + 1).Count(x => x);
+            return result;
+        }
+
+        internal static int select1(this BitArray array, int k, int start = 0)
+        {
+            int result = array.Cast<bool>().Select((v, i) => new { value = v, index = i })
+                    .Where(item => item.value && item.index >= start)
+                    .Skip(k - 1)
+                    .FirstOrDefault()?.index ?? 0;
+            return result;
         }
     }
 }

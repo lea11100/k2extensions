@@ -6,15 +6,15 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
-namespace k2extensions
+namespace k2extensionsLib
 {
-    internal class Converter
+    internal class FileReader
     {
         public static AdjacencyMatrixWithLabels ConvertFromFile(string filename)
         {
             var entries = from l in File.ReadLines(filename)
                           let entry = l.Split(' ')
-                          select new RdpEntry(entry[0], entry[1], entry[2]);
+                          select new RdfEntry(entry[0], entry[1], entry[2]);
 
             var nodes = entries.Select(x=>x.Subject).Concat(entries.Select(x => x.Object)).Distinct().ToList();
             var predicates = entries.Select(x => x.Predicate).Distinct().ToList();
@@ -36,7 +36,7 @@ namespace k2extensions
         {
             var entries = from l in File.ReadLines(filename)
                     let entry = l.Split(' ')
-                    select new RdpEntry(entry[0], entry[1], entry[2]);
+                    select new RdfEntry(entry[0], entry[1], entry[2]);
             var so = entries.Select(x => x.Subject).Intersect(entries.Select(x => x.Object));
             var preds = entries.Select(x => x.Predicate).Distinct().ToList();
 

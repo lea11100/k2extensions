@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace k2extensions
 {
@@ -11,39 +12,46 @@ namespace k2extensions
     {
         public static AdjacencyMatrixWithLabels ConvertFromFile(string filename)
         {
-            List<string> nodes = new List<string>();
-            List<string> predicates = new List<string>();
-            int counter = 0;
-            using (var sr = new StreamReader(filename))
-            {
-                string? line = sr.ReadLine();
-                while (line != null)
-                {
-                    string[] split = line.Split(' ');
-                    var s = split[0]; var p = split[1]; var o = split[2];
-                    nodes.Add(s);
-                    nodes.Add(o);
-                    predicates.Add(p);
-                    if (counter == 1000) //shrink lists every 1000th entry
-                    {
-                        nodes = nodes.Distinct().ToList();
-                        predicates = predicates.Distinct().ToList();
-                    }
-                }
-                nodes = nodes.Distinct().ToList();
-                predicates = predicates.Distinct().ToList();
-            }
+            var entries = from l in File.ReadLines(filename)
+                          let entry = l.Split(' ')
+                          select new RdpEntry(entry[0], entry[1], entry[2]);
+
+            var nodes = entries.Select(x=>x.Subject).Concat(entries.Select(x => x.Object)).Distinct().ToList();
+            var predicates = entries.Select(x => x.Predicate).Distinct().ToList();
+
             BitArray[][] matrix = Enumerable.Repeat(Enumerable.Repeat(new BitArray(predicates.Count), nodes.Count).ToArray(), nodes.Count).ToArray();
 
-            using (var sr = new StreamReader(filename))
+            foreach (var e in entries)
             {
-                string? line = sr.ReadLine();
-                while (line != null)
-                {             
-                    string[] split = line.Split(' ');
-                    var s = split[0]; var p = split[1]; var o = split[2];
-                    matrix[nodes.IndexOf(s)][nodes.IndexOf(o)][predicates.IndexOf(p)] = true;                    
-                }
+                int r = nodes.IndexOf(e.Subject);
+                int c = nodes.IndexOf(e.Object);
+                int p = predicates.IndexOf(e.Predicate);
+                matrix[r][c][p] = true;
+            }
+
+            return new AdjacencyMatrixWithLabels(matrix);
+        }
+
+        public static AdjacencyMatrixWithLabels ConvertFromFileUsingK2Triples(string filename)
+        {
+            var entries = from l in File.ReadLines(filename)
+                    let entry = l.Split(' ')
+                    select new RdpEntry(entry[0], entry[1], entry[2]);
+            var so = entries.Select(x => x.Subject).Intersect(entries.Select(x => x.Object));
+            var preds = entries.Select(x => x.Predicate).Distinct().ToList();
+
+            var rows = so.Concat(entries.Select(x => x.Subject).Except(entries.Select(x => x.Object))).ToList();
+            var cols = so.Concat(entries.Select(x => x.Object).Except(entries.Select(x => x.Subject))).ToList();
+            so = null;
+            BitArray[][] matrix = Enumerable.Repeat(Enumerable.Repeat(new BitArray(preds.Count()), rows.Count).ToArray(), cols.Count).ToArray();
+
+            foreach (var e in entries)
+            {
+                int r = rows.IndexOf(e.Subject);
+                int c = cols.IndexOf(e.Object);
+                int p = preds.IndexOf(e.Predicate);
+
+                matrix[r][c][p] = true;
             }
 
             return new AdjacencyMatrixWithLabels(matrix);

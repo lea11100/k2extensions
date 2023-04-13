@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Numerics;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -23,7 +24,7 @@ namespace k2extensions
         {
             this.data = data;
             this.numberRows = numberRows;
-            this.numberCols = numberCols;  
+            this.numberCols = numberCols;
         }
 
         internal bool GetBitOrZero(int row, int column)
@@ -41,14 +42,14 @@ namespace k2extensions
 
         private BitArray GetForK2Rec(int row, int column, int size)
         {
-            if(size != 1)
+            if (size != 1)
             {
                 bool[] result = new bool[(int)Math.Pow(size, 2)];
                 int halfSize = size / 2;
-                GetForK2Rec(row, column, halfSize).CopyTo(result,0);
-                GetForK2Rec(row, column+ halfSize, halfSize).CopyTo(result, halfSize);
-                GetForK2Rec(row+halfSize, column, halfSize).CopyTo(result, halfSize * 2);
-                GetForK2Rec(row+halfSize, column+halfSize, halfSize).CopyTo(result, halfSize * 3);
+                GetForK2Rec(row, column, halfSize).CopyTo(result, 0);
+                GetForK2Rec(row, column + halfSize, halfSize).CopyTo(result, halfSize);
+                GetForK2Rec(row + halfSize, column, halfSize).CopyTo(result, halfSize * 2);
+                GetForK2Rec(row + halfSize, column + halfSize, halfSize).CopyTo(result, halfSize * 3);
                 return new BitArray(result);
             }
             else
@@ -73,7 +74,7 @@ namespace k2extensions
             this.data = data;
             this.numberRows = numberRows;
             this.numberCols = numberCols;
-            this.labelLength = labelLength; 
+            this.labelLength = labelLength;
         }
 
         public AdjacencyMatrixWithLabels(BitArray[][] matrix)
@@ -130,5 +131,19 @@ namespace k2extensions
             }
         }
 
+    }
+
+    internal class RdpEntry
+    {
+        public string Subject { get; set; }
+        public string Object { get; set; }
+        public string Predicate { get; set; }
+
+        public RdpEntry(string s, string p, string o)
+        {
+            Subject = s;
+            Object = o;
+            Predicate = p;
+        }
     }
 }

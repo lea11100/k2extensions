@@ -234,6 +234,9 @@ namespace k2extensionsLib
 
     internal interface IK2Extension
     {
+        string[] Subjects { get; set; }
+        string[] Objects { get; set; }
+        string[] Predicates { get; set; }
         void Compress(AdjacencyMatrixWithLabels matrix);
         RdfEntry[] Decomp();
         RdfEntry[] Prec(string o);

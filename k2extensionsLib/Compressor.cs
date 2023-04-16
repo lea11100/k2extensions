@@ -17,16 +17,16 @@ namespace k2extensionsLib
         BitArray labels { get; set; }
         int startLeaves { get; set; }
         int k { get; set; }
-        string[] subjects { get; set; }
-        string[] objects { get; set; }
-        string[] predicates { get; set; }
+        string[] Subjects { get; set; }
+        string[] Objects { get; set; }
+        string[] Predicates { get; set; }
 
         public k2ArrayIndex(int k, string[] subjects, string[] objects, string[] predicates)
         {
             this.k = k;
-            this.subjects = subjects;
-            this.objects = objects;
-            this.predicates = predicates;
+            this.Subjects = subjects;
+            this.Objects = objects;
+            this.Predicates = predicates;
             nodes = new BitArray(0);
             labels = new BitArray(0);
         }
@@ -56,18 +56,18 @@ namespace k2extensionsLib
         public RdfEntry[] AllEdgesOfType(string p)
         {
             List<RdfEntry> result = new List<RdfEntry>();
-            int positionInTypes = Array.IndexOf(predicates, p);
+            int positionInTypes = Array.IndexOf(Predicates, p);
             List<int> nodesWithType = new List<int>();
             int counter = positionInTypes;
             while (counter < labels.Length)
             {
                 if (labels[counter]) nodesWithType.Add(counter);
-                counter += predicates.Length;
+                counter += Predicates.Length;
             }
             foreach (var n in nodesWithType)
             {
                 Tuple<int, int> cell = getCell(startLeaves + n);
-                var r = new RdfEntry(subjects[cell.Item1], predicates[positionInTypes], objects[cell.Item2]);
+                var r = new RdfEntry(subjects[cell.Item1], Predicates[positionInTypes], objects[cell.Item2]);
                 result.Add(r);
             }
             return result.ToArray();  

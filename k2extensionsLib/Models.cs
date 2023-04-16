@@ -232,16 +232,17 @@ namespace k2extensionsLib
         }
     }
 
-    internal interface k2Extension
+    internal interface IK2Extension
     {
-        RdfEntry[] prec(string o);
-        RdfEntry[] succ(string s);
-        RdfEntry[] decomp();
-        RdfEntry[] allEdgesOfType(string p);
-        RdfEntry[] connections(string s, string o);
-        RdfEntry[] precOfType(string o, string p);
-        RdfEntry[] succOfType(string s, string p);
-        bool exists(string s, string p, string o);
+        void Compress(AdjacencyMatrixWithLabels matrix);
+        RdfEntry[] Decomp();
+        RdfEntry[] Prec(string o);
+        RdfEntry[] Succ(string s);
+        RdfEntry[] AllEdgesOfType(string p);
+        RdfEntry[] Connections(string s, string o);
+        RdfEntry[] PrecOfType(string o, string p);
+        RdfEntry[] SuccOfType(string s, string p);
+        bool Exists(string s, string p, string o);
     }
 
     internal static class GeneralExtensions
@@ -259,6 +260,20 @@ namespace k2extensionsLib
                     .Skip(k - 1)
                     .FirstOrDefault()?.index ?? 0;
             return result;
+        }
+
+        internal static int[] ToBase(this int value, int baseSize)
+        {
+            Stack<int> digits = new Stack<int>();
+
+            long tmp = value;
+            while (tmp != 0)
+            {
+                digits.Push((int)(tmp % baseSize));
+                tmp = (long)((tmp - digits.Peek()) / baseSize);
+            }
+
+            return digits.ToArray();
         }
     }
 }

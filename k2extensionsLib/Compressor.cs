@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Drawing;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -10,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace k2extensionsLib
 {
-    internal class k2ArrayIndex : k2Extension
+    internal class k2ArrayIndex : IK2Extension
     {
         BitArray nodes { get; set; }
         BitArray labels { get; set; }
@@ -52,7 +53,7 @@ namespace k2extensionsLib
             nodes = n.GetFittedArray();
         }
 
-        public RdfEntry[] allEdgesOfType(string p)
+        public RdfEntry[] AllEdgesOfType(string p)
         {
             List<RdfEntry> result = new List<RdfEntry>();
             int positionInTypes = Array.IndexOf(predicates, p);
@@ -72,44 +73,47 @@ namespace k2extensionsLib
             return result.ToArray();  
         }
 
-        public RdfEntry[] connections(string s, string o)
+        public RdfEntry[] Connections(string s, string o)
         {
-            int positionInSubjects = Array.IndexOf(subjects, s);
-            int positionInObjects = Array.IndexOf(objects, o);
+            int[] positionInSubjects = Array.IndexOf(subjects, s).ToBase(k);
+            int[] positionInObjects = Array.IndexOf(objects, o).ToBase(k);
+            int numberOfDigits = Math.Max(subjects.Length, objects.Length).ToBase(k).Length;
+            while (positionInSubjects.Length < numberOfDigits) positionInSubjects.Prepend(0);
+            while (positionInObjects.Length < numberOfDigits) positionInObjects.Prepend(0);
             int position = 0;
-            while (position < startLeaves)
+            for (int i = 0; i < numberOfDigits; i++)
             {
 
             }
             throw new NotImplementedException();
         }
 
-        public RdfEntry[] decomp()
+        public RdfEntry[] Decomp()
         {
             throw new NotImplementedException();
         }
 
-        public bool exists(string s, string p, string o)
+        public bool Exists(string s, string p, string o)
         {
             throw new NotImplementedException();
         }
 
-        public RdfEntry[] prec(string o)
+        public RdfEntry[] Prec(string o)
         {
             throw new NotImplementedException();
         }
 
-        public RdfEntry[] precOfType(string o, string p)
+        public RdfEntry[] PrecOfType(string o, string p)
         {
             throw new NotImplementedException();
         }
 
-        public RdfEntry[] succ(string s)
+        public RdfEntry[] Succ(string s)
         {
             throw new NotImplementedException();
         }
 
-        public RdfEntry[] succOfType(string s, string p)
+        public RdfEntry[] SuccOfType(string s, string p)
         {
             throw new NotImplementedException();
         }

@@ -7,4 +7,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\k2extensionsLib\k2extensionsLib.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="TestData\search.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

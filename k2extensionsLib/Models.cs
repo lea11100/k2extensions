@@ -59,7 +59,7 @@ namespace k2extensionsLib
         }
     }
 
-    internal class AdjacencyMatrixWithLabels
+    public class AdjacencyMatrixWithLabels
     {
         /// <summary>
         /// Stores cells one by one. A cell is labelLength many bits wide
@@ -133,7 +133,7 @@ namespace k2extensionsLib
 
     }
 
-    internal class RdfEntry
+    public class RdfEntry
     {
         public string Subject { get; set; }
         public string Object { get; set; }
@@ -232,7 +232,7 @@ namespace k2extensionsLib
         }
     }
 
-    internal interface IK2Extension
+    public interface IK2Extension
     {
         string[] Subjects { get; set; }
         string[] Objects { get; set; }

@@ -4,18 +4,22 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using VDS.RDF;
 
 namespace k2extensionsLib
 {
-    internal class Tester
+    public class Tester
     {
-        internal string TestExtensions(List<IK2Extension> extensionsUnderTest, string fileName, bool useK2Triples)
+        public string TestExtensions(List<IK2Extension> extensionsUnderTest, string fileName, bool useK2Triples)
         {
+            IGraph g = new Graph();
+            g.LoadFromFile(fileName);
+
             AdjacencyMatrixWithLabels matrix;
             if (useK2Triples) 
-                matrix = FileReader.ConvertFromFileUsingK2Triples(fileName);   
+                matrix = FileReader.ConvertUsingK2Triples(g);   
             else           
-                matrix = FileReader.ConvertFromFile(fileName);
+                matrix = FileReader.Convert(g);
 
             List<Tuple<string, string, string>> testValues = new List<Tuple<string, string, string>>();
             Random r = new Random();

@@ -17,9 +17,9 @@ namespace k2extensionsLib
         BitArray labels { get; set; }
         int startLeaves { get; set; }
         int k { get; set; }
-        string[] Subjects { get; set; }
-        string[] Objects { get; set; }
-        string[] Predicates { get; set; }
+        public string[] Subjects { get; set; }
+        public string[] Objects { get; set; }
+        public string[] Predicates { get; set; }
 
         public k2ArrayIndex(int k, string[] subjects, string[] objects, string[] predicates)
         {
@@ -67,7 +67,7 @@ namespace k2extensionsLib
             foreach (var n in nodesWithType)
             {
                 Tuple<int, int> cell = getCell(startLeaves + n);
-                var r = new RdfEntry(subjects[cell.Item1], Predicates[positionInTypes], objects[cell.Item2]);
+                var r = new RdfEntry(Subjects[cell.Item1], Predicates[positionInTypes], Objects[cell.Item2]);
                 result.Add(r);
             }
             return result.ToArray();  
@@ -75,9 +75,9 @@ namespace k2extensionsLib
 
         public RdfEntry[] Connections(string s, string o)
         {
-            int[] positionInSubjects = Array.IndexOf(subjects, s).ToBase(k);
-            int[] positionInObjects = Array.IndexOf(objects, o).ToBase(k);
-            int numberOfDigits = Math.Max(subjects.Length, objects.Length).ToBase(k).Length;
+            int[] positionInSubjects = Array.IndexOf(Subjects, s).ToBase(k);
+            int[] positionInObjects = Array.IndexOf(Objects, o).ToBase(k);
+            int numberOfDigits = Math.Max(Subjects.Length, Objects.Length).ToBase(k).Length;
             while (positionInSubjects.Length < numberOfDigits) positionInSubjects.Prepend(0);
             while (positionInObjects.Length < numberOfDigits) positionInObjects.Prepend(0);
             int position = 0;

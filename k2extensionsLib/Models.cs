@@ -7,6 +7,7 @@ using System.Numerics;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
+using VDS.RDF;
 
 namespace k2extensionsLib
 {
@@ -234,18 +235,18 @@ namespace k2extensionsLib
 
     public interface IK2Extension
     {
-        string[] Subjects { get; set; }
-        string[] Objects { get; set; }
-        string[] Predicates { get; set; }
-        void Compress(AdjacencyMatrixWithLabels matrix);
-        RdfEntry[] Decomp();
-        RdfEntry[] Prec(string o);
-        RdfEntry[] Succ(string s);
-        RdfEntry[] AllEdgesOfType(string p);
-        RdfEntry[] Connections(string s, string o);
-        RdfEntry[] PrecOfType(string o, string p);
-        RdfEntry[] SuccOfType(string s, string p);
-        bool Exists(string s, string p, string o);
+        IEnumerable<INode> Subjects { get; set; }
+        IEnumerable<INode> Objects { get; set; }
+        IEnumerable<INode> Predicates { get; set; }
+        void Compress(IGraph graph, bool useK2Triples);
+        Triple[] Decomp();
+        Triple[] Prec(INode o);
+        Triple[] Succ(INode s);
+        Triple[] AllEdgesOfType(INode p);
+        Triple[] Connections(INode s, INode o);
+        Triple[] PrecOfType(INode o, INode p);
+        Triple[] SuccOfType(INode s, INode p);
+        bool Exists(INode s, INode p, INode o);
     }
 
     internal static class GeneralExtensions

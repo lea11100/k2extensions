@@ -15,20 +15,14 @@ namespace k2extensionsLib
             IGraph g = new Graph();
             g.LoadFromFile(fileName);
 
-            AdjacencyMatrixWithLabels matrix;
-            if (useK2Triples) 
-                matrix = FileReader.ConvertUsingK2Triples(g);   
-            else           
-                matrix = FileReader.Convert(g);
-
-            List<Tuple<string, string, string>> testValues = new List<Tuple<string, string, string>>();
+            List<Triple> testValues = new List<Triple>();
             Random r = new Random();
             for(int i = 0; i < 100; i++)
             {
-                testValues.Add(new Tuple<string, string, string>(
-                    extensionsUnderTest[0].Subjects[r.Next(matrix.numberRows)],
-                    extensionsUnderTest[0].Predicates[r.Next(matrix.labelLength)],
-                    extensionsUnderTest[0].Objects[r.Next(matrix.numberCols)]
+                testValues.Add(new Triple(
+                    extensionsUnderTest[0].Subjects.ElementAt(r.Next(extensionsUnderTest[0].Subjects.Count())),
+                    extensionsUnderTest[0].Predicates.ElementAt(r.Next(extensionsUnderTest[0].Predicates.Count())),
+                    extensionsUnderTest[0].Objects.ElementAt(r.Next(extensionsUnderTest[0].Objects.Count()))
                     ));
             }
             string result = "Name,Compression,SPO,SP?O,SP?O?,S?P?O,S?PO?,S?PO,SPO?\r\n";
@@ -36,16 +30,16 @@ namespace k2extensionsLib
             foreach (var ext in extensionsUnderTest)
             {
                 result += ext.GetType().Name + ",";
-                result += GetExecutionTime(()=>ext.Compress(matrix)) + ",";
+                result += GetExecutionTime(()=>ext.Compress(g, useK2Triples)) + ",";
                 foreach (var t in testValues)
                 {
-                    timeResults[0].Add(GetExecutionTime(() => ext.Exists(t.Item1, t.Item2, t.Item3)));
-                    timeResults[1].Add(GetExecutionTime(() => ext.Connections(t.Item1, t.Item3)));
-                    timeResults[2].Add(GetExecutionTime(() => ext.Succ(t.Item1)));
-                    timeResults[3].Add(GetExecutionTime(() => ext.Prec(t.Item3)));
-                    timeResults[4].Add(GetExecutionTime(() => ext.AllEdgesOfType(t.Item2)));
-                    timeResults[5].Add(GetExecutionTime(() => ext.PrecOfType(t.Item3, t.Item2)));
-                    timeResults[6].Add(GetExecutionTime(() => ext.SuccOfType(t.Item1, t.Item2)));
+                    timeResults[0].Add(GetExecutionTime(() => ext.Exists(t.Subject, t.Predicate, t.Object)));
+                    timeResults[1].Add(GetExecutionTime(() => ext.Connections(t.Subject, t.Object)));
+                    timeResults[2].Add(GetExecutionTime(() => ext.Succ(t.Subject)));
+                    timeResults[3].Add(GetExecutionTime(() => ext.Prec(t.Object)));
+                    timeResults[4].Add(GetExecutionTime(() => ext.AllEdgesOfType(t.Predicate)));
+                    timeResults[5].Add(GetExecutionTime(() => ext.PrecOfType(t.Object, t.Predicate)));
+                    timeResults[6].Add(GetExecutionTime(() => ext.SuccOfType(t.Subject, t.Predicate)));
                 }
                 timeResults.ForEach(x => result += x.Average() + ",");
                 result += GetExecutionTime(() => ext.Decomp()) + "\r\n";

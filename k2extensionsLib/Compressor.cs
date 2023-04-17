@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
+using VDS.RDF;
 
 namespace k2extensionsLib
 {
@@ -17,30 +18,44 @@ namespace k2extensionsLib
         BitArray labels { get; set; }
         int startLeaves { get; set; }
         int k { get; set; }
-        public string[] Subjects { get; set; }
-        public string[] Objects { get; set; }
-        public string[] Predicates { get; set; }
+        public IEnumerable<INode> Subjects { get; set; }
+        public IEnumerable<INode> Objects { get; set; }
+        public IEnumerable<INode> Predicates { get; set; }
 
-        public k2ArrayIndex(int k, string[] subjects, string[] objects, string[] predicates)
+        public k2ArrayIndex(int k)
         {
             this.k = k;
-            this.Subjects = subjects;
-            this.Objects = objects;
-            this.Predicates = predicates;
             nodes = new BitArray(0);
             labels = new BitArray(0);
+            Subjects = new List<INode>();
+            Predicates = new List<INode>();
+            Objects = new List<INode>();
         }
 
-        public void Compress(AdjacencyMatrixWithLabels matrix)
+        public void Compress(IGraph graph, bool useK2Triples)
         {
             DynamicBitArray[] levels = new DynamicBitArray[0];
             DynamicBitArray labels = new DynamicBitArray();
 
-            int size = Math.Max(matrix.numberCols, matrix.numberRows);
+            Subjects = graph.Triples.Select(x=>x.Subject).Distinct();
+            Objects = graph.Triples.Select(x => x.Object).Distinct();
+            if (useK2Triples) 
+            {
+                Subjects = Subjects.OrderBy(x => Objects.Contains(x));
+                Objects = Objects.OrderBy(x => Subjects.Contains(x));
+            }
+            else
+            {
+                Subjects = Subjects.Concat(Objects);
+                Objects = Subjects;
+            }
+            Predicates = graph.Triples.Select(x => x.Predicate).Distinct();
+
+            int size = Math.Max(Subjects.Count(), Objects.Count());
             int N = k;
             while (N < size) N *= k;
 
-            build(ref levels, ref labels, 0, matrix, 0, 0, N, k);
+            build(ref levels, ref labels, 0, graph, 0, 0, N, k);
 
             this.labels = labels.GetFittedArray();
             DynamicBitArray n = new DynamicBitArray();
@@ -53,31 +68,31 @@ namespace k2extensionsLib
             nodes = n.GetFittedArray();
         }
 
-        public RdfEntry[] AllEdgesOfType(string p)
+        public Triple[] AllEdgesOfType(INode p)
         {
-            List<RdfEntry> result = new List<RdfEntry>();
-            int positionInTypes = Array.IndexOf(Predicates, p);
+            List<Triple> result = new List<Triple>();
+            int positionInTypes = Array.IndexOf(Predicates.ToArray(), p);
             List<int> nodesWithType = new List<int>();
             int counter = positionInTypes;
             while (counter < labels.Length)
             {
                 if (labels[counter]) nodesWithType.Add(counter);
-                counter += Predicates.Length;
+                counter += Predicates.Count();
             }
             foreach (var n in nodesWithType)
             {
                 Tuple<int, int> cell = getCell(startLeaves + n);
-                var r = new RdfEntry(Subjects[cell.Item1], Predicates[positionInTypes], Objects[cell.Item2]);
+                var r = new Triple(Subjects.ElementAt(cell.Item1), Predicates.ElementAt(positionInTypes), Objects.ElementAt(cell.Item2));
                 result.Add(r);
             }
             return result.ToArray();  
         }
 
-        public RdfEntry[] Connections(string s, string o)
+        public Triple[] Connections(INode s, INode o)
         {
-            int[] positionInSubjects = Array.IndexOf(Subjects, s).ToBase(k);
-            int[] positionInObjects = Array.IndexOf(Objects, o).ToBase(k);
-            int numberOfDigits = Math.Max(Subjects.Length, Objects.Length).ToBase(k).Length;
+            int[] positionInSubjects = Array.IndexOf(Subjects.ToArray(), s).ToBase(k);
+            int[] positionInObjects = Array.IndexOf(Objects.ToArray(), o).ToBase(k);
+            int numberOfDigits = Math.Max(Subjects.Count(), Objects.Count()).ToBase(k).Length;
             while (positionInSubjects.Length < numberOfDigits) positionInSubjects.Prepend(0);
             while (positionInObjects.Length < numberOfDigits) positionInObjects.Prepend(0);
             int position = 0;
@@ -88,32 +103,32 @@ namespace k2extensionsLib
             throw new NotImplementedException();
         }
 
-        public RdfEntry[] Decomp()
+        public Triple[] Decomp()
         {
             throw new NotImplementedException();
         }
 
-        public bool Exists(string s, string p, string o)
+        public bool Exists(INode s, INode p, INode o)
         {
             throw new NotImplementedException();
         }
 
-        public RdfEntry[] Prec(string o)
+        public Triple[] Prec(INode o)
         {
             throw new NotImplementedException();
         }
 
-        public RdfEntry[] PrecOfType(string o, string p)
+        public Triple[] PrecOfType(INode o, INode p)
         {
             throw new NotImplementedException();
         }
 
-        public RdfEntry[] Succ(string s)
+        public Triple[] Succ(INode s)
         {
             throw new NotImplementedException();
         }
 
-        public RdfEntry[] SuccOfType(string s, string p)
+        public Triple[] SuccOfType(INode s, INode p)
         {
             throw new NotImplementedException();
         }
@@ -148,7 +163,7 @@ namespace k2extensionsLib
             return result;
         }
 
-        private bool build(ref DynamicBitArray[] levels, ref DynamicBitArray labels, int level, AdjacencyMatrixWithLabels matrix, int row, int col, int N, int k)
+        private bool build(ref DynamicBitArray[] levels, ref DynamicBitArray labels, int level, IGraph graph, int row, int col, int N, int k)
         {
             while (levels.Length <= level) levels.Append(new DynamicBitArray());
             var submatrix = new BitArray((int)Math.Pow(k, 2));
@@ -160,7 +175,13 @@ namespace k2extensionsLib
                 {
                     for (int j = 0; j < k; j++)
                     {
-                        BitArray label = matrix.GetLabelOrZero(row + i, col + j);
+                        IEnumerable<INode> triples = graph.GetTriplesWithSubjectObject(Subjects.ElementAt(row+i), Objects.ElementAt(col+j)).Select(x=>x.Predicate);
+                        BitArray label = new BitArray(Predicates.Count(), false);
+                        for (int l = 0; l < Predicates.Count(); l++)
+                        {
+                            if (triples.Contains(Predicates.ElementAt(l))) label[l] = true;
+                        }
+
                         if (label.Cast<bool>().Any(x => x == true)) {
                             submatrix[index] = true;
                             additionalLabels.AddRange(label);
@@ -182,7 +203,7 @@ namespace k2extensionsLib
                 {
                     for (int j = 0; j < k; j++)
                     {
-                        submatrix[index] = build(ref levels, ref labels, level + 1, matrix, row + i * NextN, col + j * NextN, NextN, k);
+                        submatrix[index] = build(ref levels, ref labels, level + 1, graph, row + i * NextN, col + j * NextN, NextN, k);
                         index++;
                     }
                 }
@@ -197,7 +218,6 @@ namespace k2extensionsLib
                 return false;
             }
         }
- 
 
 
     }

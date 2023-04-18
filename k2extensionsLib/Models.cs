@@ -134,9 +134,28 @@ namespace k2extensionsLib
             get 
             {
                 int block = key / 64;
-                int bitNumber = key % 64;
-                var bit = (data[block] & (ulong)(1 << bitNumber - 1)) != 0;
+                int position = key % 64;
+                var bit = (data[block] & (ulong)(1 << position - 1)) != 0;
                 return bit;
+            }
+        }
+
+        internal ulong[] this[Range range]
+        {
+            get
+            {
+                int startBlock = range.Start.Value / 64;
+                int startPosition = range.Start.Value % 64;
+                int endBlock = range.End.Value / 64;
+                int endPosition = range.End.Value % 64;
+                ulong[] result = data[startBlock..endBlock];
+                for (int i = 0; i < result.Length-1; i++)
+                {
+                    result[i] <<= startPosition;
+                    result[i]|= result[i+1] >>> startPosition;
+                }
+                result[^1] = result[^1] & (ulong.MinValue << (endPosition-1));
+                return result;
             }
         }
 
@@ -145,13 +164,18 @@ namespace k2extensionsLib
             return data.Length * 64;
         }
 
-        internal int Rank1(int index)
+        internal int Rank1(int index, int start = 0)
         {
+            int ignoredOnes = 0;
+            if (start != 0)
+            {
+                ignoredOnes = Rank1(start-1);
+            }
             int block = index / 64;
             int posInBlock = index % 64;
             int result = oneCounter[block];
             result += BitOperations.PopCount(data[block] >> (64 - posInBlock));
-            return result;
+            return result - ignoredOnes;
         }
 
         internal int Select1(int numberOfOnes)

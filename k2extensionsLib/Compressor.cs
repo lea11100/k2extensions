@@ -98,10 +98,23 @@ namespace k2extensionsLib
             int position = 0;
             for (int i = 0; i < numberOfDigits; i++)
             {
-
+                int relativePosition = k * positionInSubjects[i] + positionInObjects[i];
+                position += relativePosition;
+                if (!nodes[position])
+                {
+                    return new Triple[0];
+                }
+                else
+                {
+                    position = nodes.Rank1(position) * k * k;
+                }
             }
-            throw new NotImplementedException();
+            int rankInLeaves = nodes.Rank1(position, startLeaves);
+            ulong[] l = labels[(Predicates.Count() * rankInLeaves)..10];
+            var result = GetPredicatesFromBitStream(l).Select(x=>new Triple(s,x,o));         
+            return result.ToArray();
         }
+
 
         public Triple[] Decomp()
         {
@@ -131,6 +144,28 @@ namespace k2extensionsLib
         public Triple[] SuccOfType(INode s, INode p)
         {
             throw new NotImplementedException();
+        }
+
+        private INode[] GetPredicatesFromBitStream(ulong[] stream)
+        {
+            int position = 0;
+            var result = new List<INode>();
+            foreach (var block in stream)
+            {
+                for (int j = 0; j < 64; j++)
+                {
+                    if((block & (ulong)(1 << j - 1)) != 0)
+                    {
+                        result.Add(Predicates.ElementAt(position));
+                    }
+                    position++;
+                    if (position >= Predicates.Count())
+                    {
+                        return result.ToArray();
+                    }
+                }
+            }
+            return result.ToArray();
         }
 
         /// <summary>

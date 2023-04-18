@@ -241,5 +241,10 @@ namespace k2extensionsLib
 
             return digits.ToArray();
         }
+
+        internal static IEnumerable<Triple> Sort(this IEnumerable<Triple> list)
+        {
+            return list.OrderBy(t => t.Subject).ThenBy(t => t.Object).ThenBy(t => t.Predicate);
+        }
     }
 }

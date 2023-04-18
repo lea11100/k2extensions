@@ -1,12 +1,17 @@
 ﻿using J2N.Numerics;
+using Lucene.Net.Diagnostics;
+using NUnit.Framework;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics.X86;
 using System.Text;
 using System.Threading.Tasks;
 using VDS.RDF;
+using VDS.RDF.Shacl.Validation;
 
 namespace k2extensionsLib
 {
@@ -27,26 +32,70 @@ namespace k2extensionsLib
                     extensionsUnderTest[0].Objects.ElementAt(r.Next(extensionsUnderTest[0].Objects.Count()))
                     ));
             }
+            var correctValues = getCorrectValues(testValues, g);
+            var testResExists = correctValues.Item1;
+            var testRes = correctValues.Item2;
             string result = "Name,Compression,SPO,SP?O,SP?O?,S?P?O,S?PO?,S?PO,SPO?\r\n";
             List<List<double>> timeResults = new List<List<double>>(7);
             foreach (var ext in extensionsUnderTest)
             {
                 result += ext.GetType().Name + ",";
                 result += GetExecutionTime(()=>ext.Compress(g, useK2Triples)) + ",";
-                foreach (var t in testValues)
+                for(int i =0; i < testValues.Count; i++)
                 {
-                    timeResults[0].Add(GetExecutionTime(() => ext.Exists(t.Subject, t.Predicate, t.Object)));
-                    timeResults[1].Add(GetExecutionTime(() => ext.Connections(t.Subject, t.Object)));
-                    timeResults[2].Add(GetExecutionTime(() => ext.Succ(t.Subject)));
-                    timeResults[3].Add(GetExecutionTime(() => ext.Prec(t.Object)));
-                    timeResults[4].Add(GetExecutionTime(() => ext.AllEdgesOfType(t.Predicate)));
-                    timeResults[5].Add(GetExecutionTime(() => ext.PrecOfType(t.Object, t.Predicate)));
-                    timeResults[6].Add(GetExecutionTime(() => ext.SuccOfType(t.Subject, t.Predicate)));
+                    Triple t = testValues[i];
+                    bool resExists = false;
+                    timeResults[0].Add(GetExecutionTime(ref resExists, () => ext.Exists(t.Subject, t.Predicate, t.Object)));
+                    Assert.AreEqual(testResExists[i], resExists);
+                    IEnumerable<Triple> res = new List<Triple>();
+                    timeResults[1].Add(GetExecutionTime(ref res, () => ext.Connections(t.Subject, t.Object)));
+                    Assert.AreEqual(testRes[i][0], res.Sort());
+                    timeResults[2].Add(GetExecutionTime(ref res, () => ext.Succ(t.Subject)));
+                    Assert.AreEqual(testRes[i][1], res.Sort());
+                    timeResults[3].Add(GetExecutionTime(ref res, () => ext.Prec(t.Object)));
+                    Assert.AreEqual(testRes[i][2], res.Sort());
+                    timeResults[4].Add(GetExecutionTime(ref res, () => ext.AllEdgesOfType(t.Predicate)));
+                    Assert.AreEqual(testRes[i][3], res.Sort());
+                    timeResults[5].Add(GetExecutionTime(ref res, () => ext.PrecOfType(t.Object, t.Predicate)));
+                    Assert.AreEqual(testRes[i][4], res.Sort());
+                    timeResults[6].Add(GetExecutionTime(ref res, () => ext.SuccOfType(t.Subject, t.Predicate)));
+                    Assert.AreEqual(testRes[i][5], res.Sort());
+                    timeResults[7].Add(GetExecutionTime(ref res, ext.Decomp));
+                    Assert.AreEqual(testRes[i][6], res.Sort());
                 }
                 timeResults.ForEach(x => result += x.Average() + ",");
                 result += GetExecutionTime(() => ext.Decomp()) + "\r\n";
             }
             return result;
+        }
+
+        private Tuple<List<bool>, List<List<IEnumerable<Triple>>>> getCorrectValues(List<Triple> testValues, IGraph graph)
+        {
+            var existsResults = new List<bool>();
+            var result = new List<List<IEnumerable<Triple>>>();
+            foreach (var t in testValues)
+            {
+                var testResults = new List<IEnumerable<Triple>>(7);
+                existsResults.Add(graph.GetTripleNode(t) != null);
+                testResults[0] = graph.GetTriplesWithSubjectObject(t.Subject, t.Object).Sort();
+                testResults[1] = graph.GetTriplesWithSubject(t.Subject).Sort();
+                testResults[2] = graph.GetTriplesWithObject(t.Object).Sort();
+                testResults[3] = graph.GetTriplesWithPredicate(t.Predicate).Sort();
+                testResults[4] = graph.GetTriplesWithPredicateObject(t.Predicate, t.Object).Sort();
+                testResults[5] = graph.GetTriplesWithSubjectPredicate(t.Subject, t.Predicate).Sort();
+                testResults[6] = graph.Triples.Sort();
+                result.Add(testResults);             
+            }
+            return new Tuple<List<bool>, List<List<IEnumerable<Triple>>>>(existsResults, result);
+        }
+
+        private double GetExecutionTime<T>(ref T result, Func<T> method)
+        {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            result = method();
+            watch.Stop();
+            var elapsedMs = watch.ElapsedMilliseconds;
+            return elapsedMs;
         }
 
         private double GetExecutionTime(Action method)

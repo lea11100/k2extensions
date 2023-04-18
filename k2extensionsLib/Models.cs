@@ -1,9 +1,11 @@
-﻿using System;
+﻿using Lucene.Net.Util;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Numerics;
+using System.Runtime.Intrinsics.X86;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
@@ -93,6 +95,103 @@ namespace k2extensionsLib
         private void shrink()
         {
             data.Length = lastIndex;
+        }
+    }
+
+    internal class FastRankBitArray
+    {
+        private ulong[] data;
+        private int[] oneCounter;
+
+        internal FastRankBitArray()
+        {
+            data = new ulong[0];
+            oneCounter = new int[0];
+        }
+
+        internal FastRankBitArray(BitArray array)
+        {
+            data = new ulong[0];
+            oneCounter = new int[0];
+            Store(array);
+        }
+
+        internal void Store(BitArray array)
+        {
+            data = new ulong[(int)Math.Ceiling(((double)array.Length) / 64)];
+            oneCounter = new int[(int)Math.Ceiling(((double)array.Length) / 64)];
+            array.CopyTo(data, 0);
+            initOneCounter();
+        }
+
+        internal IEnumerator GetEnumerator()
+        {
+            return data.GetEnumerator();
+        }
+
+        internal bool this[int key]
+        {
+            get 
+            {
+                int block = key / 64;
+                int bitNumber = key % 64;
+                var bit = (data[block] & (ulong)(1 << bitNumber - 1)) != 0;
+                return bit;
+            }
+        }
+
+        internal int Length()
+        {
+            return data.Length * 64;
+        }
+
+        internal int Rank1(int index)
+        {
+            int block = index / 64;
+            int posInBlock = index % 64;
+            int result = oneCounter[block];
+            result += BitOperations.PopCount(data[block] >> (64 - posInBlock));
+            return result;
+        }
+
+        internal int Select1(int numberOfOnes)
+        {
+            int block = Array.BinarySearch(oneCounter, numberOfOnes);
+            int onesInBlock = numberOfOnes - oneCounter[block];
+            int positionInBlock = Array.BinarySearch(ulongToArray(data[block]), onesInBlock, new _CompareByRank());
+            return block * 64 + positionInBlock;
+        }
+
+        private void initOneCounter()
+        {
+            int counter = 0;
+            for (int i = 0; i < data.Length; i++)
+            {
+                oneCounter[i] = counter;
+                counter += BitOperations.PopCount(data[i]);
+            }
+        }
+
+        private ulong[] ulongToArray(ulong value)
+        {
+            var result =new ulong[64];
+            for (int i = 0; i < 64; i++)
+            {
+                result[i] = value;
+                value = value >>> 1;
+            }
+            return result;
+        }
+
+        private class _CompareByRank : IComparer
+        {
+            public int Compare(object? x, object? y)
+            {
+                ulong v1 = (ulong)(x??0);
+                ulong v2 = (ulong)(y??0);
+
+                return BitOperations.PopCount(v1) - BitOperations.PopCount(v2);
+            }
         }
     }
 

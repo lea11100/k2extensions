@@ -14,8 +14,8 @@ namespace k2extensionsLib
 {
     internal class k2ArrayIndex : IK2Extension
     {
-        BitArray nodes { get; set; }
-        BitArray labels { get; set; }
+        FastRankBitArray nodes { get; set; }
+        FastRankBitArray labels { get; set; }
         int startLeaves { get; set; }
         int k { get; set; }
         public IEnumerable<INode> Subjects { get; set; }
@@ -25,8 +25,8 @@ namespace k2extensionsLib
         public k2ArrayIndex(int k)
         {
             this.k = k;
-            nodes = new BitArray(0);
-            labels = new BitArray(0);
+            nodes = new FastRankBitArray();
+            labels = new FastRankBitArray();
             Subjects = new List<INode>();
             Predicates = new List<INode>();
             Objects = new List<INode>();
@@ -57,7 +57,7 @@ namespace k2extensionsLib
 
             build(ref levels, ref labels, 0, graph, 0, 0, N, k);
 
-            this.labels = labels.GetFittedArray();
+            this.labels = new FastRankBitArray(labels.GetFittedArray());
             DynamicBitArray n = new DynamicBitArray();
             foreach (var l in levels.Take(levels.Length -1))
             {
@@ -65,7 +65,7 @@ namespace k2extensionsLib
             }
             startLeaves = n.GetFittedArray().Length;
             n.AddRange(levels.Last().GetFittedArray());
-            nodes = n.GetFittedArray();
+            nodes = new FastRankBitArray(n.GetFittedArray());
         }
 
         public Triple[] AllEdgesOfType(INode p)
@@ -74,7 +74,7 @@ namespace k2extensionsLib
             int positionInTypes = Array.IndexOf(Predicates.ToArray(), p);
             List<int> nodesWithType = new List<int>();
             int counter = positionInTypes;
-            while (counter < labels.Length)
+            while (counter < labels.Length())
             {
                 if (labels[counter]) nodesWithType.Add(counter);
                 counter += Predicates.Count();
@@ -159,7 +159,7 @@ namespace k2extensionsLib
         private int getParentPosition(int position)
         {
             int numberOf1Bits = position / (int)Math.Pow(k, 2);
-            int result = nodes.select1(numberOf1Bits);
+            int result = nodes.Select1(numberOf1Bits);
             return result;
         }
 

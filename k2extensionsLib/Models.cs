@@ -266,6 +266,18 @@ namespace k2extensionsLib
             return digits.ToArray();
         }
 
+        internal static int FromBase(this IEnumerable<int> value, int baseSize)
+        {
+            int result = 0;
+            int b = 1;
+            for (int i = value.Count() - 1; i >= 0; i--)
+            {
+                result += b * value.ElementAt(i);
+                b *= baseSize;
+            }
+            return result;
+        }
+
         internal static IEnumerable<Triple> Sort(this IEnumerable<Triple> list)
         {
             return list.OrderBy(t => t.Subject).ThenBy(t => t.Object).ThenBy(t => t.Predicate);

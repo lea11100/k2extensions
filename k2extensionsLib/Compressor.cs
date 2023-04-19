@@ -1,4 +1,5 @@
-﻿using System;
+﻿using J2N.Numerics;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -55,7 +56,7 @@ namespace k2extensionsLib
             int N = k;
             while (N < size) N *= k;
 
-            build(ref levels, ref labels, 0, graph, 0, 0, N, k);
+            compressRec(ref levels, ref labels, 0, graph, 0, 0, N, k);
 
             this.labels = new FastRankBitArray(labels.GetFittedArray());
             DynamicBitArray n = new DynamicBitArray();
@@ -90,13 +91,9 @@ namespace k2extensionsLib
 
         public Triple[] Connections(INode s, INode o)
         {
-            int[] positionInSubjects = Array.IndexOf(Subjects.ToArray(), s).ToBase(k);
-            int[] positionInObjects = Array.IndexOf(Objects.ToArray(), o).ToBase(k);
-            int numberOfDigits = Math.Max(Subjects.Count(), Objects.Count()).ToBase(k).Length;
-            while (positionInSubjects.Length < numberOfDigits) positionInSubjects.Prepend(0);
-            while (positionInObjects.Length < numberOfDigits) positionInObjects.Prepend(0);
+            (int[] positionInSubjects, int[] positionInObjects) = getKBasedPosition(s, o);
             int position = 0;
-            for (int i = 0; i < numberOfDigits; i++)
+            for (int i = 0; i < positionInSubjects.Length; i++)
             {
                 int relativePosition = k * positionInSubjects[i] + positionInObjects[i];
                 position += relativePosition;
@@ -109,25 +106,29 @@ namespace k2extensionsLib
                     position = nodes.Rank1(position) * k * k;
                 }
             }
-            int rankInLeaves = nodes.Rank1(position, startLeaves);
-            ulong[] l = labels[(Predicates.Count() * rankInLeaves)..10];
-            var result = GetPredicatesFromBitStream(l).Select(x=>new Triple(s,x,o));         
+            var result = getLabelFormLeafPosition(position).Select(x=>new Triple(s,x,o));         
             return result.ToArray();
         }
 
 
         public Triple[] Decomp()
         {
-            throw new NotImplementedException();
+            return decompRec(0, new List<int>(), new List<int>());
         }
 
         public bool Exists(INode s, INode p, INode o)
         {
-            throw new NotImplementedException();
+            Triple[] cons = Connections(s, o);
+            return cons.Where(x => x.Predicate == p).Count() != 0;
         }
 
         public Triple[] Prec(INode o)
         {
+            int[] position = getKBasedPosition(Array.IndexOf(Objects.ToArray(), o));
+            for (int i = 0; i < position.Length; i++)
+            {
+
+            }
             throw new NotImplementedException();
         }
 
@@ -146,7 +147,59 @@ namespace k2extensionsLib
             throw new NotImplementedException();
         }
 
-        private INode[] GetPredicatesFromBitStream(ulong[] stream)
+
+        private (int[], int[]) getKBasedPosition(INode subj, INode obj) 
+        {
+            int[] positionInSubjects = Array.IndexOf(Subjects.ToArray(), subj).ToBase(k);
+            int[] positionInObjects = Array.IndexOf(Objects.ToArray(), obj).ToBase(k);
+            int numberOfDigits = Math.Max(Subjects.Count(), Objects.Count()).ToBase(k).Length;
+            while (positionInSubjects.Length < numberOfDigits) positionInSubjects.Prepend(0);
+            while (positionInObjects.Length < numberOfDigits) positionInObjects.Prepend(0);
+            return (positionInSubjects, positionInObjects);
+        }
+
+        private int[] getKBasedPosition(int position)
+        {
+            int[] result = position.ToBase(k);
+            int numberOfDigits = Math.Max(Subjects.Count(), Objects.Count()).ToBase(k).Length;
+            while (result.Length < numberOfDigits) result.Prepend(0);
+            return result;
+        }
+
+        private Triple[] decompRec(int position, IEnumerable<int> row, IEnumerable<int> column)
+        {
+            var result = new List<Triple>();
+            if (position >= startLeaves)
+            {
+                var edges = getLabelFormLeafPosition(position).Select(p =>
+                    new Triple(Subjects.ElementAt(row.FromBase(k)), p, Objects.ElementAt(column.FromBase(k))));
+                result.AddRange(edges);
+            }
+            else if (!nodes[position])
+            {
+                return result.ToArray();
+            }
+            for (int i = 0; i < k; i++)
+            {
+                for (int j = 0; j < k; j++)
+                {
+                    int relativePosition = k * i + j;
+                    result.AddRange(decompRec(position + relativePosition, row.Prepend(i), column.Prepend(j)));
+
+                }
+            }
+            return result.ToArray();
+        }
+
+        private INode[] getLabelFormLeafPosition(int position)
+        {
+            int rankInLeaves = nodes.Rank1(position, startLeaves);
+            ulong[] l = labels[(Predicates.Count() * rankInLeaves)..(Predicates.Count() * rankInLeaves + Predicates.Count())];
+            var result = getPredicatesFromBitStream(l);
+            return result.ToArray();
+        }
+
+        private INode[] getPredicatesFromBitStream(ulong[] stream)
         {
             int position = 0;
             var result = new List<INode>();
@@ -198,7 +251,7 @@ namespace k2extensionsLib
             return result;
         }
 
-        private bool build(ref DynamicBitArray[] levels, ref DynamicBitArray labels, int level, IGraph graph, int row, int col, int N, int k)
+        private bool compressRec(ref DynamicBitArray[] levels, ref DynamicBitArray labels, int level, IGraph graph, int row, int col, int N, int k)
         {
             while (levels.Length <= level) levels.Append(new DynamicBitArray());
             var submatrix = new BitArray((int)Math.Pow(k, 2));
@@ -238,7 +291,7 @@ namespace k2extensionsLib
                 {
                     for (int j = 0; j < k; j++)
                     {
-                        submatrix[index] = build(ref levels, ref labels, level + 1, graph, row + i * NextN, col + j * NextN, NextN, k);
+                        submatrix[index] = compressRec(ref levels, ref labels, level + 1, graph, row + i * NextN, col + j * NextN, NextN, k);
                         index++;
                     }
                 }

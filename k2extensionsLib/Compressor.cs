@@ -125,28 +125,54 @@ namespace k2extensionsLib
         public Triple[] Prec(INode o)
         {
             int[] position = getKBasedPosition(Array.IndexOf(Objects.ToArray(), o));
-            for (int i = 0; i < position.Length; i++)
-            {
-
-            }
-            throw new NotImplementedException();
+            Triple[] result = precOrSuccRec(o, 0, position, new List<int>(), false);
+            return result;
         }
 
         public Triple[] PrecOfType(INode o, INode p)
         {
-            throw new NotImplementedException();
+            return Prec(o).Where(x => x.Predicate == p).ToArray();
         }
 
         public Triple[] Succ(INode s)
         {
-            throw new NotImplementedException();
+            int[] position = getKBasedPosition(Array.IndexOf(Objects.ToArray(), o));
+            Triple[] result = precOrSuccRec(o, 0, position, new List<int>(), true);
+            return result;
         }
 
         public Triple[] SuccOfType(INode s, INode p)
         {
-            throw new NotImplementedException();
+            return Succ(s).Where(x => x.Predicate == p).ToArray();
         }
 
+        private Triple[] precOrSuccRec(INode n, int positionInNodes, int[] searchPath, List<int> parentPath, bool searchObj)
+        {
+            List<Triple> result = new List<Triple>();
+            if (!nodes[positionInNodes])
+            {
+                return result.ToArray();
+            }
+            else if (searchPath.Length == 0)
+            {
+                result.AddRange(getLabelFormLeafPosition(positionInNodes).Select(
+                    x => new Triple(
+                        searchObj ? Objects.ElementAt(parentPath.FromBase(k)) : Subjects.ElementAt(parentPath.FromBase(k)),
+                        x, n)));
+            }
+            else
+            {
+                int p = searchPath[0];
+                searchPath = searchPath.Skip(1).ToArray();
+                positionInNodes = nodes.Rank1(positionInNodes) * k * k;
+                for (int i = 0; i < k; i++)
+                {
+                    int relativePosition = searchObj ? i*p+k : i * k + p;
+                    result.AddRange(precOrSuccRec(n, positionInNodes + relativePosition, searchPath, parentPath.Prepend(i).ToList(), searchObj));
+                }
+            }
+            return result.ToArray();
+        }
 
         private (int[], int[]) getKBasedPosition(INode subj, INode obj) 
         {

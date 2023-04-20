@@ -333,6 +333,21 @@ namespace k2extensionsLib
             }
         }
 
+        public void Store(string filename)
+        {
+            using(var sw = File.CreateText(filename))
+            {
+                sw.WriteLine(String.Join(" ", Subjects));
+                sw.WriteLine(String.Join(" ", Objects));
+                sw.WriteLine(String.Join(" ", Predicates));
+                sw.WriteLine(String.Join(" ", nodes));
+            }
+            throw new NotImplementedException();
+        }
 
+        public void Load(string filename)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

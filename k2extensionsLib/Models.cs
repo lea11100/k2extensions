@@ -186,6 +186,11 @@ namespace k2extensionsLib
             return block * 64 + positionInBlock;
         }
 
+        internal string GetDataAsString()
+        {
+            var result = String.Join("", data.Select(x => Convert.ToChar(x)));
+        }
+
         private void initOneCounter()
         {
             int counter = 0;
@@ -233,6 +238,8 @@ namespace k2extensionsLib
         Triple[] PrecOfType(INode o, INode p);
         Triple[] SuccOfType(INode s, INode p);
         bool Exists(INode s, INode p, INode o);
+        void Store(string filename);
+        void Load(string filename);
     }
 
     internal static class GeneralExtensions

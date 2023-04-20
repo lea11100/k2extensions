@@ -35,7 +35,8 @@ namespace k2extensionsLib
             var correctValues = getCorrectValues(testValues, g);
             var testResExists = correctValues.Item1;
             var testRes = correctValues.Item2;
-            string result = "Name,Compression,SPO,SP?O,SP?O?,S?P?O,S?PO?,S?PO,SPO?\r\n";
+            var uncompressedSize = new FileInfo(fileName).Length;
+            string result = "Name,Compression,SPO,SP?O,SP?O?,S?P?O,S?PO?,S?PO,SPO?,Compression ratio\r\n";
             List<List<double>> timeResults = new List<List<double>>(7);
             foreach (var ext in extensionsUnderTest)
             {
@@ -64,7 +65,10 @@ namespace k2extensionsLib
                     Assert.AreEqual(testRes[i][6], res.Sort());
                 }
                 timeResults.ForEach(x => result += x.Average() + ",");
-                result += GetExecutionTime(() => ext.Decomp()) + "\r\n";
+                result += GetExecutionTime(() => ext.Decomp()) + ";";
+                ext.Store(ext.GetType().Name + "_Compression.txt");
+                long compressedSíze = new FileInfo(ext.GetType().Name + "_Compression.txt").Length;
+                result += ((double) compressedSíze / uncompressedSize).ToString("P2") +"\r\n";
             }
             return result;
         }

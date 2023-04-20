@@ -124,6 +124,26 @@ namespace k2extensionsLib
             initOneCounter();
         }
 
+        internal void Store(string array)
+        {
+            data = new ulong[(int)Math.Ceiling(((double)array.Length) / 4)];
+            oneCounter = new int[(int)Math.Ceiling(((double)array.Length) / 4)];
+            var chunkedArray = array.Chunk(4);
+            for (int i = 0; i < chunkedArray.Count(); i++)
+            {
+                char[] chunk = chunkedArray.ElementAt(i);
+                ulong d = 0;
+                for (int j = 0; j < 4; j++)
+                {
+                    int c = chunk[j];
+                    d += (ulong)c;
+                    d <<= 16;
+                }
+                data[i] = d;
+            }
+            initOneCounter();
+        }
+
         internal IEnumerator GetEnumerator()
         {
             return data.GetEnumerator();
@@ -188,7 +208,21 @@ namespace k2extensionsLib
 
         internal string GetDataAsString()
         {
-            var result = String.Join("", data.Select(x => Convert.ToChar(x)));
+            var result = string.Join("", data.Select(ulongToChar));
+            return result;
+        }
+
+        private char[] ulongToChar(ulong value)
+        {
+            ulong extractor = (ulong)short.MaxValue;
+            var result = new char[4];
+            for (int i = 0; i < 4; i++)
+            {
+                int c = (int)(value & extractor) >> (i * 16);
+                result[^(i+1)] = (char)c;
+                extractor <<= 16;
+            }
+            return result;
         }
 
         private void initOneCounter()

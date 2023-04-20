@@ -136,8 +136,8 @@ namespace k2extensionsLib
 
         public Triple[] Succ(INode s)
         {
-            int[] position = getKBasedPosition(Array.IndexOf(Objects.ToArray(), o));
-            Triple[] result = precOrSuccRec(o, 0, position, new List<int>(), true);
+            int[] position = getKBasedPosition(Array.IndexOf(Objects.ToArray(), s));
+            Triple[] result = precOrSuccRec(s, 0, position, new List<int>(), true);
             return result;
         }
 
@@ -337,17 +337,33 @@ namespace k2extensionsLib
         {
             using(var sw = File.CreateText(filename))
             {
-                sw.WriteLine(String.Join(" ", Subjects));
-                sw.WriteLine(String.Join(" ", Objects));
-                sw.WriteLine(String.Join(" ", Predicates));
-                sw.WriteLine(String.Join(" ", nodes));
+                sw.WriteLine(string.Join(" ", Subjects));
+                sw.WriteLine(string.Join(" ", Objects));
+                sw.WriteLine(string.Join(" ", Predicates));
+                sw.WriteLine(startLeaves);
+                sw.WriteLine(nodes.GetDataAsString());
+                sw.WriteLine(labels.GetDataAsString());
             }
             throw new NotImplementedException();
         }
 
         public void Load(string filename)
         {
-            throw new NotImplementedException();
+            using (var sr = new StreamReader(filename))
+            {
+                string line = sr.ReadLine() ?? "";
+                NodeFactory nf = new NodeFactory(new NodeFactoryOptions());
+                Subjects = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
+                line = sr.ReadLine() ?? "";
+                Objects = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
+                line = sr.ReadLine() ?? "";
+                Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
+                line = sr.ReadLine() ?? "";
+                startLeaves = int.Parse(line);
+                line = sr.ReadLine() ?? "";
+                nodes.Store(line);
+                labels.Store(line);
+            }
         }
     }
 }

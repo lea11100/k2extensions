@@ -1,4 +1,5 @@
-﻿using Lucene.Net.Util;
+﻿using J2N.Collections.Generic.Extensions;
+using Lucene.Net.Util;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -211,11 +212,13 @@ namespace k2extensionsLib
 
         internal int Select1(int numberOfOnes)
         {
+            if (numberOfOnes == 0) return 0;
             int block = Array.BinarySearch(oneCounter, numberOfOnes);
             if (block < 0) block = ~block - 1;
             int onesInBlock = numberOfOnes - oneCounter[block];
-            int positionInBlock = Array.BinarySearch(ulongToArray(data[block]), onesInBlock, new _CompareByRank());
-            return block * 64 + positionInBlock;
+            List<(int, int)> ranks = ulongToRankArray(data[block]).ToList();
+            int positionInRanks = ranks.Select(x => x.Item2).ToList().BinarySearch(onesInBlock);
+            return block * 64 + ranks[positionInRanks].Item1;
         }
 
         internal string GetDataAsString()
@@ -247,24 +250,20 @@ namespace k2extensionsLib
             }
         }
 
-        private ulong[] ulongToArray(ulong value)
+        private (int, int)[] ulongToRankArray(ulong value)
         {
-            var result = new ulong[64];
-            for (int i = 0; i < 64; i++)
+            var result = new List<(int,int)>();
+            ulong extractor = ulong.MaxValue >> 1;
+            for (int i = 0; i <64; i++)
             {
-                result[i] = value;
-                value = value >>> 1;
+                ulong v = value & ~extractor;
+                if (result.Count == 0)
+                    result.Add((i, BitOperations.PopCount(v)));
+                else if (result.Last().Item2 != BitOperations.PopCount(v))
+                    result.Add((i, BitOperations.PopCount(v)));
+                extractor >>= 1;
             }
-            return result;
-        }
-
-        private class _CompareByRank : IComparer<ulong>
-        {
-            public int Compare(ulong x, ulong y)
-            {
-
-                return BitOperations.PopCount(x) - BitOperations.PopCount(y);
-            }
+            return result.ToArray();
         }
     }
 

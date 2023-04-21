@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Data.Common;
 using System.Drawing;
 using System.Linq;
 using System.Reflection;
@@ -84,7 +85,8 @@ namespace k2extensionsLib
             }
             foreach (var n in nodesWithType)
             {
-                Tuple<int, int> cell = getCell(startLeaves + n);
+                int positionInNodes = nodes.Select1(nodes.Rank1(startLeaves) + n + 1);
+                Tuple<int, int> cell = getCell(positionInNodes);
                 var r = new Triple(Subjects.ElementAt(cell.Item1), Predicates.ElementAt(positionInTypes), Objects.ElementAt(cell.Item2));
                 result.Add(r);
             }
@@ -115,7 +117,17 @@ namespace k2extensionsLib
 
         public Triple[] Decomp()
         {
-            return decompRec(0, new List<int>(), new List<int>());
+            var result = new List<Triple>();
+            for (int i = 0; i < k; i++)
+            {
+                for (int j = 0; j < k; j++)
+                {
+                    int relativePosition = k * i + j;
+                    result.AddRange(decompRec(relativePosition, new List<int>() { i }, new List<int>() { j}));
+
+                }
+            }
+            return result.ToArray();
         }
 
         public bool Exists(INode s, INode p, INode o)
@@ -139,7 +151,7 @@ namespace k2extensionsLib
 
         public Triple[] PrecOfType(INode o, INode p)
         {
-            return Prec(o).Where(x => x.Predicate == p).ToArray();
+            return Prec(o).Where(x => x.Predicate.Equals(p)).ToArray();
         }
 
         public Triple[] Succ(INode s)
@@ -157,7 +169,7 @@ namespace k2extensionsLib
 
         public Triple[] SuccOfType(INode s, INode p)
         {
-            return Succ(s).Where(x => x.Predicate == p).ToArray();
+            return Succ(s).Where(x => x.Predicate.Equals(p)).ToArray();
         }
 
         private Triple[] precOrSuccRec(INode n, int positionInNodes, int[] searchPath, List<int> parentPath, bool searchObj)
@@ -210,7 +222,7 @@ namespace k2extensionsLib
         private Triple[] decompRec(int position, IEnumerable<int> row, IEnumerable<int> column)
         {
             var result = new List<Triple>();
-            if (position >= startLeaves)
+            if (position >= startLeaves && nodes[position])
             {
                 var edges = getLabelFormLeafPosition(position).Select(p =>
                     new Triple(Subjects.ElementAt(row.FromBase(k)), p, Objects.ElementAt(column.FromBase(k))));
@@ -220,6 +232,7 @@ namespace k2extensionsLib
             {
                 return result.ToArray();
             }
+            position = nodes.Rank1(position) * k * k;
             for (int i = 0; i < k; i++)
             {
                 for (int j = 0; j < k; j++)

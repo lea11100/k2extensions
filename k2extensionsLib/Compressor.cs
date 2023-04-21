@@ -231,9 +231,9 @@ namespace k2extensionsLib
             var result = new List<INode>();
             foreach (var block in stream)
             {
-                for (int j = 0; j < 64; j++)
+                for (int j = 63; j >= 0; j--)
                 {
-                    if((block & (ulong)(1 << j - 1)) != 0)
+                    if((block & ((ulong)1 << j)) != 0)
                     {
                         result.Add(Predicates.ElementAt(position));
                     }

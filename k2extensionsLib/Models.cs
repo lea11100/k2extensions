@@ -179,12 +179,13 @@ namespace k2extensionsLib
                 int endBlock = range.End.Value / 64;
                 int endPosition = range.End.Value % 64;
                 ulong[] result = data[startBlock..(endBlock+1)];
-                for (int i = 0; i < result.Length - 1; i++)
+                for (int i = 0; i < result.Length-1; i++)
                 {
                     result[i] <<= startPosition;
                     result[i] |= result[i + 1] >>> startPosition;
-                }
-                result[^1] = result[^1] & (ulong.MaxValue << (endPosition - 1));
+                }              
+                result[^1] = result[^1] & (ulong.MaxValue << (63 - endPosition));
+                result[^1] <<= startPosition;
                 return result;
             }
         }

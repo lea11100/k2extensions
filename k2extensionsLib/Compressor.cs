@@ -119,14 +119,20 @@ namespace k2extensionsLib
         public bool Exists(INode s, INode p, INode o)
         {
             Triple[] cons = Connections(s, o);
-            return cons.Where(x => x.Predicate == p).Count() != 0;
+            return cons.Where(x => x.Predicate.Equals(p)).Count() != 0;
         }
 
         public Triple[] Prec(INode o)
         {
             int[] position = getKBasedPosition(Array.IndexOf(Objects.ToArray(), o));
-            Triple[] result = precOrSuccRec(o, 0, position, new List<int>(), false);
-            return result;
+            List<Triple> result = new List<Triple>();
+            for (int i = 0; i < k; i++)
+            {
+                int relativePosition = i * k + position[0];
+                result.AddRange(precOrSuccRec(o, relativePosition, position.Skip(1).ToArray(), new List<int>() { i }, false));
+
+            }
+            return result.ToArray();
         }
 
         public Triple[] PrecOfType(INode o, INode p)
@@ -136,9 +142,15 @@ namespace k2extensionsLib
 
         public Triple[] Succ(INode s)
         {
-            int[] position = getKBasedPosition(Array.IndexOf(Objects.ToArray(), s));
-            Triple[] result = precOrSuccRec(s, 0, position, new List<int>(), true);
-            return result;
+            int[] position = getKBasedPosition(Array.IndexOf(Subjects.ToArray(), s));
+            List<Triple> result = new List<Triple>();
+            for (int i = 0; i < k; i++)
+            {
+                int relativePosition = position[0] * k + i;
+                result.AddRange(precOrSuccRec(s, relativePosition, position.Skip(1).ToArray(), new List<int>() { i}, true));
+
+            }
+            return result.ToArray();
         }
 
         public Triple[] SuccOfType(INode s, INode p)
@@ -149,27 +161,28 @@ namespace k2extensionsLib
         private Triple[] precOrSuccRec(INode n, int positionInNodes, int[] searchPath, List<int> parentPath, bool searchObj)
         {
             List<Triple> result = new List<Triple>();
-            if (!nodes[positionInNodes])
-            {
-                return result.ToArray();
-            }
-            else if (searchPath.Length == 0)
+
+            if(searchPath.Length == 0 && nodes[positionInNodes])
             {
                 result.AddRange(getLabelFormLeafPosition(positionInNodes).Select(
-                    x => new Triple(
-                        searchObj ? Objects.ElementAt(parentPath.FromBase(k)) : Subjects.ElementAt(parentPath.FromBase(k)),
-                        x, n)));
+                    x => searchObj ? new Triple( n, x, Objects.ElementAt(parentPath.FromBase(k))):
+                        new Triple(Subjects.ElementAt(parentPath.FromBase(k)), x, n)));
+            }
+            else if (!nodes[positionInNodes])
+            {
+                return result.ToArray();
             }
             else
             {
                 int p = searchPath[0];
                 searchPath = searchPath.Skip(1).ToArray();
-                positionInNodes = nodes.Rank1(positionInNodes) * k * k;
+                positionInNodes = nodes.Rank1(positionInNodes) * k * k ;
                 for (int i = 0; i < k; i++)
                 {
-                    int relativePosition = searchObj ? i*p+k : i * k + p;
-                    result.AddRange(precOrSuccRec(n, positionInNodes + relativePosition, searchPath, parentPath.Prepend(i).ToList(), searchObj));
+                    int relativePosition = searchObj ? p*k+i : i * k + p;
+                    result.AddRange(precOrSuccRec(n, positionInNodes + relativePosition, searchPath, parentPath.Append(i).ToList(), searchObj));
                 }
+                
             }
             return result.ToArray();
         }
@@ -188,7 +201,7 @@ namespace k2extensionsLib
         {
             int[] result = position.ToBase(k);
             int numberOfDigits = Math.Max(Subjects.Count(), Objects.Count()).ToBase(k).Length;
-            while (result.Length < numberOfDigits) result.Prepend(0);
+            while (result.Length < numberOfDigits) result = result.Prepend(0).ToArray();
             return result;
         }
 

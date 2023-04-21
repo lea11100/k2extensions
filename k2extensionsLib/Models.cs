@@ -120,9 +120,19 @@ namespace k2extensionsLib
         {
             data = new ulong[(int)Math.Ceiling(((double)array.Length) / 64)];
             oneCounter = new int[(int)Math.Ceiling(((double)array.Length) / 64)];
-            array.CopyTo(data, 0);
+            for (int i = 0; i < Math.Ceiling((double)array.Length/64)*64; i++)
+            {
+                int j = i / 64;
+                data[j] <<= 1;
+                if (i < array.Length)
+                {
+                    data[j] += array[i] ? 1 : (ulong)0;
+                }
+            }
             initOneCounter();
         }
+
+
 
         internal void Store(string array)
         {
@@ -151,11 +161,11 @@ namespace k2extensionsLib
 
         internal bool this[int key]
         {
-            get 
+            get
             {
                 int block = key / 64;
                 int position = key % 64;
-                var bit = (data[block] & (ulong)(1 << position - 1)) != 0;
+                var bit = (data[block] & ((ulong)1 << 63 - position)) != 0;
                 return bit;
             }
         }
@@ -168,13 +178,13 @@ namespace k2extensionsLib
                 int startPosition = range.Start.Value % 64;
                 int endBlock = range.End.Value / 64;
                 int endPosition = range.End.Value % 64;
-                ulong[] result = data[startBlock..endBlock];
-                for (int i = 0; i < result.Length-1; i++)
+                ulong[] result = data[startBlock..(endBlock+1)];
+                for (int i = 0; i < result.Length - 1; i++)
                 {
                     result[i] <<= startPosition;
-                    result[i]|= result[i+1] >>> startPosition;
+                    result[i] |= result[i + 1] >>> startPosition;
                 }
-                result[^1] = result[^1] & (ulong.MinValue << (endPosition-1));
+                result[^1] = result[^1] & (ulong.MaxValue << (endPosition - 1));
                 return result;
             }
         }
@@ -189,12 +199,12 @@ namespace k2extensionsLib
             int ignoredOnes = 0;
             if (start != 0)
             {
-                ignoredOnes = Rank1(start-1);
+                ignoredOnes = Rank1(start - 1);
             }
             int block = index / 64;
             int posInBlock = index % 64;
             int result = oneCounter[block];
-            result += BitOperations.PopCount(data[block] >> (64 - posInBlock));
+            result += BitOperations.PopCount(data[block] >>> (63 - posInBlock));
             return result - ignoredOnes;
         }
 
@@ -219,7 +229,7 @@ namespace k2extensionsLib
             for (int i = 0; i < 4; i++)
             {
                 int c = (int)(value & extractor) >> (i * 16);
-                result[^(i+1)] = (char)c;
+                result[^(i + 1)] = (char)c;
                 extractor <<= 16;
             }
             return result;
@@ -237,7 +247,7 @@ namespace k2extensionsLib
 
         private ulong[] ulongToArray(ulong value)
         {
-            var result =new ulong[64];
+            var result = new ulong[64];
             for (int i = 0; i < 64; i++)
             {
                 result[i] = value;
@@ -250,8 +260,8 @@ namespace k2extensionsLib
         {
             public int Compare(object? x, object? y)
             {
-                ulong v1 = (ulong)(x??0);
-                ulong v2 = (ulong)(y??0);
+                ulong v1 = (ulong)(x ?? 0);
+                ulong v2 = (ulong)(y ?? 0);
 
                 return BitOperations.PopCount(v1) - BitOperations.PopCount(v2);
             }

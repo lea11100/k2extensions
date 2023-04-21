@@ -24,20 +24,32 @@ namespace k2extensionsLib
 
             List<Triple> testValues = new List<Triple>();
             Random r = new Random();
-            for(int i = 0; i < 100; i++)
+            var s = g.Triples.Select(x => x.Subject).Distinct();
+            var o = g.Triples.Select(x => x.Object).Distinct();
+            var p = g.Triples.Select(x => x.Predicate).Distinct();
+            for (int i = 0; i < 20; i++)
+            {
+                testValues.Add(g.Triples.ElementAt(r.Next(g.Triples.Count())));
+            }
+            for (int i = 0; i < 80; i++)
             {
                 testValues.Add(new Triple(
-                    extensionsUnderTest[0].Subjects.ElementAt(r.Next(extensionsUnderTest[0].Subjects.Count())),
-                    extensionsUnderTest[0].Predicates.ElementAt(r.Next(extensionsUnderTest[0].Predicates.Count())),
-                    extensionsUnderTest[0].Objects.ElementAt(r.Next(extensionsUnderTest[0].Objects.Count()))
+                    s.ElementAt(r.Next(s.Count())),
+                    p.ElementAt(r.Next(p.Count())),
+                    o.ElementAt(r.Next(o.Count()))
                     ));
             }
+            s = null; p = null; o = null;
             var correctValues = getCorrectValues(testValues, g);
             var testResExists = correctValues.Item1;
             var testRes = correctValues.Item2;
             var uncompressedSize = new FileInfo(fileName).Length;
             string result = "Name,Compression,SPO,SP?O,SP?O?,S?P?O,S?PO?,S?PO,SPO?,Compression ratio\r\n";
-            List<List<double>> timeResults = new List<List<double>>(7);
+            List<List<double>> timeResults = new List<List<double>>();
+            for (int i = 0; i < 8; i++)
+            {
+                timeResults.Add(new List<double>());
+            }
             foreach (var ext in extensionsUnderTest)
             {
                 result += ext.GetType().Name + ",";
@@ -80,14 +92,14 @@ namespace k2extensionsLib
             foreach (var t in testValues)
             {
                 var testResults = new List<IEnumerable<Triple>>(7);
-                existsResults.Add(graph.GetTripleNode(t) != null);
-                testResults[0] = graph.GetTriplesWithSubjectObject(t.Subject, t.Object).Sort();
-                testResults[1] = graph.GetTriplesWithSubject(t.Subject).Sort();
-                testResults[2] = graph.GetTriplesWithObject(t.Object).Sort();
-                testResults[3] = graph.GetTriplesWithPredicate(t.Predicate).Sort();
-                testResults[4] = graph.GetTriplesWithPredicateObject(t.Predicate, t.Object).Sort();
-                testResults[5] = graph.GetTriplesWithSubjectPredicate(t.Subject, t.Predicate).Sort();
-                testResults[6] = graph.Triples.Sort();
+                existsResults.Add(graph.Triples.FirstOrDefault(t) != null);
+                testResults.Add(graph.GetTriplesWithSubjectObject(t.Subject, t.Object).Sort());
+                testResults.Add(graph.GetTriplesWithSubject(t.Subject).Sort());
+                testResults.Add(graph.GetTriplesWithObject(t.Object).Sort());
+                testResults.Add(graph.GetTriplesWithPredicate(t.Predicate).Sort());
+                testResults.Add(graph.GetTriplesWithPredicateObject(t.Predicate, t.Object).Sort());
+                testResults.Add(graph.GetTriplesWithSubjectPredicate(t.Subject, t.Predicate).Sort());
+                testResults.Add(graph.Triples.Sort());
                 result.Add(testResults);             
             }
             return new Tuple<List<bool>, List<List<IEnumerable<Triple>>>>(existsResults, result);

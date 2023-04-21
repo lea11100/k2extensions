@@ -13,7 +13,7 @@ using VDS.RDF;
 
 namespace k2extensionsLib
 {
-    internal class k2ArrayIndex : IK2Extension
+    public class k2ArrayIndex : IK2Extension
     {
         FastRankBitArray nodes { get; set; }
         FastRankBitArray labels { get; set; }
@@ -47,7 +47,7 @@ namespace k2extensionsLib
             }
             else
             {
-                Subjects = Subjects.Concat(Objects);
+                Subjects = Subjects.Concat(Objects).Distinct();
                 Objects = Subjects;
             }
             Predicates = graph.Triples.Select(x => x.Predicate).Distinct();
@@ -101,7 +101,7 @@ namespace k2extensionsLib
                 {
                     return new Triple[0];
                 }
-                else
+                else if(i!=positionInSubjects.Length-1)
                 {
                     position = nodes.Rank1(position) * k * k;
                 }
@@ -179,8 +179,8 @@ namespace k2extensionsLib
             int[] positionInSubjects = Array.IndexOf(Subjects.ToArray(), subj).ToBase(k);
             int[] positionInObjects = Array.IndexOf(Objects.ToArray(), obj).ToBase(k);
             int numberOfDigits = Math.Max(Subjects.Count(), Objects.Count()).ToBase(k).Length;
-            while (positionInSubjects.Length < numberOfDigits) positionInSubjects.Prepend(0);
-            while (positionInObjects.Length < numberOfDigits) positionInObjects.Prepend(0);
+            while (positionInSubjects.Length < numberOfDigits) positionInSubjects = positionInSubjects.Prepend(0).ToArray();
+            while (positionInObjects.Length < numberOfDigits) positionInObjects = positionInObjects.Prepend(0).ToArray();
             return (positionInSubjects, positionInObjects);
         }
 
@@ -219,7 +219,7 @@ namespace k2extensionsLib
 
         private INode[] getLabelFormLeafPosition(int position)
         {
-            int rankInLeaves = nodes.Rank1(position, startLeaves);
+            int rankInLeaves = nodes.Rank1(position, startLeaves) - 1;
             ulong[] l = labels[(Predicates.Count() * rankInLeaves)..(Predicates.Count() * rankInLeaves + Predicates.Count())];
             var result = getPredicatesFromBitStream(l);
             return result.ToArray();
@@ -279,7 +279,7 @@ namespace k2extensionsLib
 
         private bool compressRec(ref DynamicBitArray[] levels, ref DynamicBitArray labels, int level, IGraph graph, int row, int col, int N, int k)
         {
-            while (levels.Length <= level) levels.Append(new DynamicBitArray());
+            while (levels.Length <= level) levels = levels.Append(new DynamicBitArray()).ToArray();
             var submatrix = new BitArray((int)Math.Pow(k, 2));
             if (N == k)
             {
@@ -289,7 +289,10 @@ namespace k2extensionsLib
                 {
                     for (int j = 0; j < k; j++)
                     {
-                        IEnumerable<INode> triples = graph.GetTriplesWithSubjectObject(Subjects.ElementAt(row+i), Objects.ElementAt(col+j)).Select(x=>x.Predicate);
+                        IEnumerable<INode> triples = new List<INode>();
+                        if(row + i < Subjects.Count() && col+j<Objects.Count())
+                           triples = graph.GetTriplesWithSubjectObject(Subjects.ElementAt(row+i), Objects.ElementAt(col+j)).Select(x=>x.Predicate);
+
                         BitArray label = new BitArray(Predicates.Count(), false);
                         for (int l = 0; l < Predicates.Count(); l++)
                         {

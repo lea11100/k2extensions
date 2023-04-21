@@ -2,4 +2,4 @@
 using k2extensionsLib;
 
 Console.WriteLine("Hello, World!");
-new Tester().TestExtensions(null, "TestData//search.xml", false);
+new Tester().TestExtensions(new List<IK2Extension>() { new k2ArrayIndex(2)}, "TestData//about.rdf", false);

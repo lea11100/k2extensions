@@ -212,6 +212,7 @@ namespace k2extensionsLib
         internal int Select1(int numberOfOnes)
         {
             int block = Array.BinarySearch(oneCounter, numberOfOnes);
+            if (block < 0) block = ~block - 1;
             int onesInBlock = numberOfOnes - oneCounter[block];
             int positionInBlock = Array.BinarySearch(ulongToArray(data[block]), onesInBlock, new _CompareByRank());
             return block * 64 + positionInBlock;
@@ -257,14 +258,12 @@ namespace k2extensionsLib
             return result;
         }
 
-        private class _CompareByRank : IComparer
+        private class _CompareByRank : IComparer<ulong>
         {
-            public int Compare(object? x, object? y)
+            public int Compare(ulong x, ulong y)
             {
-                ulong v1 = (ulong)(x ?? 0);
-                ulong v2 = (ulong)(y ?? 0);
 
-                return BitOperations.PopCount(v1) - BitOperations.PopCount(v2);
+                return BitOperations.PopCount(x) - BitOperations.PopCount(y);
             }
         }
     }

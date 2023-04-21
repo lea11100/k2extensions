@@ -75,10 +75,12 @@ namespace k2extensionsLib
             int positionInTypes = Array.IndexOf(Predicates.ToArray(), p);
             List<int> nodesWithType = new List<int>();
             int counter = positionInTypes;
+            int index = 0;
             while (counter < labels.Length())
             {
-                if (labels[counter]) nodesWithType.Add(counter);
+                if (labels[counter]) nodesWithType.Add(index);
                 counter += Predicates.Count();
+                index++;
             }
             foreach (var n in nodesWithType)
             {

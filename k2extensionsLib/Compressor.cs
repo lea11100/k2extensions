@@ -1,4 +1,5 @@
-﻿using J2N.Numerics;
+﻿using AngleSharp.Common;
+using J2N.Numerics;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -20,6 +21,7 @@ namespace k2extensionsLib
         FastRankBitArray labels { get; set; }
         int startLeaves { get; set; }
         int k { get; set; }
+        private bool useK2Triples { get;set;}
         public IEnumerable<INode> Subjects { get; set; }
         public IEnumerable<INode> Objects { get; set; }
         public IEnumerable<INode> Predicates { get; set; }
@@ -27,6 +29,7 @@ namespace k2extensionsLib
         public k2ArrayIndex(int k)
         {
             this.k = k;
+            useK2Triples = false;
             nodes = new FastRankBitArray();
             labels = new FastRankBitArray();
             Subjects = new List<INode>();
@@ -38,13 +41,14 @@ namespace k2extensionsLib
         {
             DynamicBitArray[] levels = new DynamicBitArray[0];
             DynamicBitArray labels = new DynamicBitArray();
-
+            this.useK2Triples = useK2Triples;
             Subjects = graph.Triples.Select(x=>x.Subject).Distinct();
             Objects = graph.Triples.Select(x => x.Object).Distinct();
             if (useK2Triples) 
             {
-                Subjects = Subjects.OrderBy(x => Objects.Contains(x));
-                Objects = Objects.OrderBy(x => Subjects.Contains(x));
+                var so = Subjects.Intersect(Objects);
+                Subjects = so.Concat(Subjects.Where(x => !so.Contains(x))).ToList();
+                Objects = so.Concat(Objects.Where(x => !so.Contains(x))).ToList();
             }
             else
             {
@@ -232,14 +236,17 @@ namespace k2extensionsLib
             {
                 return result.ToArray();
             }
-            position = nodes.Rank1(position) * k * k;
-            for (int i = 0; i < k; i++)
+            else
             {
-                for (int j = 0; j < k; j++)
+                position = nodes.Rank1(position) * k * k;
+                for (int i = 0; i < k; i++)
                 {
-                    int relativePosition = k * i + j;
-                    result.AddRange(decompRec(position + relativePosition, row.Prepend(i), column.Prepend(j)));
+                    for (int j = 0; j < k; j++)
+                    {
+                        int relativePosition = k * i + j;
+                        result.AddRange(decompRec(position + relativePosition, row.Append(i), column.Append(j)));
 
+                    }
                 }
             }
             return result.ToArray();
@@ -368,32 +375,52 @@ namespace k2extensionsLib
         {
             using(var sw = File.CreateText(filename))
             {
-                sw.WriteLine(string.Join(" ", Subjects));
-                sw.WriteLine(string.Join(" ", Objects));
-                sw.WriteLine(string.Join(" ", Predicates));
                 sw.WriteLine(startLeaves);
                 sw.WriteLine(nodes.GetDataAsString());
                 sw.WriteLine(labels.GetDataAsString());
+                sw.WriteLine(string.Join(" ", Predicates));
+                if (useK2Triples)
+                {
+                    var so = Subjects.Intersect(Objects);
+                    sw.WriteLine(string.Join(" ", so));
+                    sw.WriteLine(string.Join(" ", Subjects.Where(x=>!so.Contains(x))));
+                    sw.WriteLine(string.Join(" ", Objects.Where(x=>!so.Contains(x))));
+                }
+                else
+                {
+                    sw.WriteLine(string.Join(" ", Subjects));
+                }
             }
-            throw new NotImplementedException();
         }
 
-        public void Load(string filename)
+        public void Load(string filename, bool useK2Triple)
         {
             using (var sr = new StreamReader(filename))
             {
                 string line = sr.ReadLine() ?? "";
                 NodeFactory nf = new NodeFactory(new NodeFactoryOptions());
-                Subjects = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
-                line = sr.ReadLine() ?? "";
-                Objects = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
-                line = sr.ReadLine() ?? "";
-                Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
-                line = sr.ReadLine() ?? "";
                 startLeaves = int.Parse(line);
                 line = sr.ReadLine() ?? "";
                 nodes.Store(line);
+                line = sr.ReadLine() ?? "";
                 labels.Store(line);
+                line = sr.ReadLine() ?? "";
+                Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x));             
+                if (useK2Triple)
+                {
+                    line = sr.ReadLine() ?? "";
+                    var so = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
+                    line = sr.ReadLine() ?? "";
+                    Subjects = so.Concat(line.Split(" ").Select(x => nf.CreateLiteralNode(x)));
+                    line = sr.ReadLine() ?? "";
+                    Objects = so.Concat(line.Split(" ").Select(x => nf.CreateLiteralNode(x)));
+                }
+                else
+                {
+                    line = sr.ReadLine() ?? "";
+                    Subjects = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
+                    Objects = Subjects;
+                }                            
             }
         }
     }

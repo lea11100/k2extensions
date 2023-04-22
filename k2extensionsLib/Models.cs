@@ -282,7 +282,7 @@ namespace k2extensionsLib
         Triple[] SuccOfType(INode s, INode p);
         bool Exists(INode s, INode p, INode o);
         void Store(string filename);
-        void Load(string filename);
+        void Load(string filename, bool useK2Triple);
     }
 
     internal static class GeneralExtensions

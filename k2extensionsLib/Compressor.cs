@@ -143,7 +143,7 @@ namespace k2extensionsLib
 
         public Triple[] Prec(INode o)
         {
-            int[] position = getKBasedPosition(Array.IndexOf(Objects.ToArray(), o));
+            int[] position = Array.IndexOf(Objects.ToArray(), o).ToBase(k, Math.Max(Subjects.Count(), Objects.Count()).ToBase(k).Length);
             List<Triple> result = new List<Triple>();
             for (int i = 0; i < k; i++)
             {
@@ -161,7 +161,7 @@ namespace k2extensionsLib
 
         public Triple[] Succ(INode s)
         {
-            int[] position = getKBasedPosition(Array.IndexOf(Subjects.ToArray(), s));
+            int[] position = Array.IndexOf(Subjects.ToArray(), s).ToBase(k, Math.Max(Subjects.Count(), Objects.Count()).ToBase(k).Length);
             List<Triple> result = new List<Triple>();
             for (int i = 0; i < k; i++)
             {
@@ -214,14 +214,6 @@ namespace k2extensionsLib
             while (positionInSubjects.Length < numberOfDigits) positionInSubjects = positionInSubjects.Prepend(0).ToArray();
             while (positionInObjects.Length < numberOfDigits) positionInObjects = positionInObjects.Prepend(0).ToArray();
             return (positionInSubjects, positionInObjects);
-        }
-
-        private int[] getKBasedPosition(int position)
-        {
-            int[] result = position.ToBase(k);
-            int numberOfDigits = Math.Max(Subjects.Count(), Objects.Count()).ToBase(k).Length;
-            while (result.Length < numberOfDigits) result = result.Prepend(0).ToArray();
-            return result;
         }
 
         private Triple[] decompRec(int position, IEnumerable<int> row, IEnumerable<int> column)
@@ -436,6 +428,13 @@ namespace k2extensionsLib
         FastRankBitArray t { get; set; }
         bool useK2Triples { get; set; }
         int k { get; set; }
+        int size
+        {
+            get
+            {
+                return Math.Max(Subjects.Count(), Math.Max(Objects.Count(), Predicates.Count()));
+            }
+        }
 
 
         public k3(int k)
@@ -450,8 +449,26 @@ namespace k2extensionsLib
 
         public Triple[] AllEdgesOfType(INode p)
         {
-            throw new NotImplementedException();
+            (int?, int?, int?)[] path = Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length - 1)
+                .Select<int, (int?, int?, int?)>(x => (null, x, null)).ToArray();
+            List<Triple> result = new List<Triple>();
+            for (int o = 0; o < k; o++)
+            {
+                for (int s = 0; s < k; s++)
+                {
+                    int relativePosition = o * k * k + (path[0].Item2 ?? 0) * k + s;
+                    result.AddRange(
+                        findNodesRec(relativePosition,
+                        path.Skip(1).ToArray(),
+                        new List<(int, int, int)>() { (s, (path[0].Item2 ?? 0), o) }));
+                }
+
+
+            }
+            return result.ToArray();
         }
+
+
 
         public void Compress(IGraph graph, bool useK2Triples)
         {
@@ -486,21 +503,66 @@ namespace k2extensionsLib
             t = new FastRankBitArray(n.GetFittedArray());
         }
 
-        
+
 
         public Triple[] Connections(INode s, INode o)
         {
-            throw new NotImplementedException();
+            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+                                         from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+                                         where subj.i == obj.i
+                                         select ((int?)subj.v, (int?)null, (int?)obj.v)).ToArray();
+
+
+            List<Triple> result = new List<Triple>();
+            for (int p = 0; p < k; p++)
+            {
+                int relativePosition = (path[0].Item3 ?? 0) * k * k + p * k + (path[0].Item1 ?? 0);
+                result.AddRange(
+                    findNodesRec(relativePosition,
+                    path.Skip(1).ToArray(),
+                    new List<(int, int, int)>() { ((path[0].Item1 ?? 0), p, (path[0].Item3 ?? 0)) }));
+            }
+            return result.ToArray();
         }
 
         public Triple[] Decomp()
         {
-            throw new NotImplementedException();
+            (int?, int?, int?)[] path = new (int?, int?, int?)[size.ToBase(k).Length - 1];
+            Array.Fill(path, (null, null, null));
+            List<Triple> result = new List<Triple>();
+            for (int o = 0; o < k; o++)
+            {
+                for (int p = 0; p < k; p++)
+                {
+                    for (int s = 0; s < k; s++)
+                    {
+                        int relativePosition = o * k * k + p * k + s;
+                        result.AddRange(
+                            findNodesRec(relativePosition,
+                            path.Skip(1).ToArray(),
+                            new List<(int, int, int)>() { (s, p, o) }));
+                    }
+                }
+            }
+            return result.ToArray();
         }
 
         public bool Exists(INode s, INode p, INode o)
         {
-            throw new NotImplementedException();
+            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+                                         from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+                                         from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+                                         where subj.i == obj.i && obj.i == pred.i
+                                         select ((int?)subj.v, (int?)pred.v, (int?)obj.v)).ToArray();
+
+
+            List<Triple> result = new List<Triple>();
+            int relativePosition = (path[0].Item3 ?? 0) * k * k + (path[0].Item2 ?? 0) * k + (path[0].Item1 ?? 0);
+            result.AddRange(
+                findNodesRec(relativePosition,
+                path.Skip(1).ToArray(),
+                new List<(int, int, int)>() { ((path[0].Item1 ?? 0), (path[0].Item2 ?? 0), (path[0].Item3 ?? 0)) }));
+            return result.Any();
         }
 
         public void Load(string filename, bool useK2Triple)
@@ -510,12 +572,43 @@ namespace k2extensionsLib
 
         public Triple[] Prec(INode o)
         {
-            throw new NotImplementedException();
+            (int?, int?, int?)[] path = (from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+                                         select ((int?)null, (int?)null, (int?)obj.v)).ToArray();
+
+
+            List<Triple> result = new List<Triple>();
+            for (int p = 0; p < k; p++)
+            {
+                for (int s = 0; s < k; s++)
+                {
+                    int relativePosition = (path[0].Item3 ?? 0) * k * k + p * k + s;
+                    result.AddRange(
+                        findNodesRec(relativePosition,
+                        path.Skip(1).ToArray(),
+                        new List<(int, int, int)>() { (s, p, path[0].Item3 ?? 0) }));
+                }
+            }
+            return result.ToArray();
         }
 
         public Triple[] PrecOfType(INode o, INode p)
         {
-            throw new NotImplementedException();
+            (int?, int?, int?)[] path = (from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+                                         from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+                                         where pred.i == obj.i
+                                         select ((int?)null, (int?)pred.v, (int?)obj.v)).ToArray();
+
+
+            List<Triple> result = new List<Triple>();
+            for (int s = 0; s < k; s++)
+            {
+                int relativePosition = (path[0].Item3 ?? 0) * k * k + (path[0].Item2 ?? 0) * k + s;
+                result.AddRange(
+                    findNodesRec(relativePosition,
+                    path.Skip(1).ToArray(),
+                    new List<(int, int, int)>() { (s, (path[0].Item2 ?? 0), (path[0].Item3 ?? 0)) }));
+            }
+            return result.ToArray();
         }
 
         public void Store(string filename)
@@ -525,12 +618,44 @@ namespace k2extensionsLib
 
         public Triple[] Succ(INode s)
         {
-            throw new NotImplementedException();
+            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+                                         select ((int?)null, (int?)null, (int?)subj.v)).ToArray();
+            List<Triple> result = new List<Triple>();
+            for (int o = 0; o < k; o++)
+            {
+                for (int p = 0; p < k; p++)
+                {
+
+
+                    int relativePosition = o * k * k + p * k + (path[0].Item1 ?? 0);
+                    result.AddRange(
+                                findNodesRec(relativePosition,
+                                path.Skip(1).ToArray(),
+                                new List<(int, int, int)>() { (path[0].Item1 ?? 0, p, 0) }));
+                }
+            }
+            return result.ToArray();
         }
 
         public Triple[] SuccOfType(INode s, INode p)
         {
-            throw new NotImplementedException();
+                                         
+            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+                                         from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+                                         where pred.i == subj.i
+                                         select ((int?)subj.v, (int?)pred.v, (int?)null)).ToArray();
+
+
+            List<Triple> result = new List<Triple>();
+            for (int o = 0; o < k; o++)
+            {
+                int relativePosition = o * k * k + (path[0].Item2 ?? 0) * k + (path[0].Item1 ?? 0);
+                result.AddRange(
+                    findNodesRec(relativePosition,
+                    path.Skip(1).ToArray(),
+                    new List<(int, int, int)>() { (path[0].Item1 ?? 0, (path[0].Item2 ?? 0), o) }));
+            }
+            return result.ToArray();
         }
 
         private bool compressRec(ref DynamicBitArray[] levels, int level, IGraph graph, int posSubj, int posPred, int posObj, int N)
@@ -578,6 +703,42 @@ namespace k2extensionsLib
             {
                 return false;
             }
+        }
+
+        private Triple[] findNodesRec(int positionInNodes, (int?, int?, int?)[] searchPath, List<(int, int, int)> parentPath)
+        {
+            List<Triple> result = new List<Triple>();
+
+            if (searchPath.Length == 0 && t[positionInNodes])
+            {
+                int posS = parentPath.Select(x => x.Item1).FromBase(k);
+                int posP = parentPath.Select(x => x.Item2).FromBase(k);
+                int posO = parentPath.Select(x => x.Item3).FromBase(k);
+                result.Add(new Triple(Subjects.ElementAt(posS), Predicates.ElementAt(posP), Objects.ElementAt(posO)));
+            }
+            else if (!t[positionInNodes])
+            {
+                return result.ToArray();
+            }
+            else
+            {
+                (int?, int?, int?) position = searchPath[0];
+                searchPath = searchPath.Skip(1).ToArray();
+                positionInNodes = t.Rank1(positionInNodes) * k * k * k;
+                for (int o = position.Item3 ?? 0; o < (position.Item3 ?? k); o++)
+                {
+                    for (int p = position.Item2 ?? 0; p < (position.Item2 ?? k); p++)
+                    {
+                        for (int s = position.Item1 ?? 0; s < (position.Item1 ?? k); s++)
+                        {
+                            int relativePosition = o * k * k + p * k + s;
+                            result.AddRange(findNodesRec(positionInNodes + relativePosition, searchPath, parentPath.Append((s, p, o)).ToList()));
+                        }
+                    }
+                }
+
+            }
+            return result.ToArray();
         }
     }
 }

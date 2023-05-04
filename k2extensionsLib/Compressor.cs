@@ -12,6 +12,7 @@ using System.Reflection.Emit;
 using System.Text;
 using System.Threading.Tasks;
 using VDS.RDF;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace k2extensionsLib
 {
@@ -21,7 +22,7 @@ namespace k2extensionsLib
         FastRankBitArray labels { get; set; }
         int startLeaves { get; set; }
         int k { get; set; }
-        private bool useK2Triples { get;set;}
+        private bool useK2Triples { get; set; }
         public IEnumerable<INode> Subjects { get; set; }
         public IEnumerable<INode> Objects { get; set; }
         public IEnumerable<INode> Predicates { get; set; }
@@ -42,9 +43,9 @@ namespace k2extensionsLib
             DynamicBitArray[] levels = new DynamicBitArray[0];
             DynamicBitArray labels = new DynamicBitArray();
             this.useK2Triples = useK2Triples;
-            Subjects = graph.Triples.Select(x=>x.Subject).Distinct();
+            Subjects = graph.Triples.Select(x => x.Subject).Distinct();
             Objects = graph.Triples.Select(x => x.Object).Distinct();
-            if (useK2Triples) 
+            if (useK2Triples)
             {
                 var so = Subjects.Intersect(Objects);
                 Subjects = so.Concat(Subjects.Where(x => !so.Contains(x))).ToList();
@@ -65,7 +66,7 @@ namespace k2extensionsLib
 
             this.labels = new FastRankBitArray(labels.GetFittedArray());
             DynamicBitArray n = new DynamicBitArray();
-            foreach (var l in levels.Take(levels.Length -1))
+            foreach (var l in levels.Take(levels.Length - 1))
             {
                 n.AddRange(l.GetFittedArray());
             }
@@ -94,7 +95,7 @@ namespace k2extensionsLib
                 var r = new Triple(Subjects.ElementAt(cell.Item1), Predicates.ElementAt(positionInTypes), Objects.ElementAt(cell.Item2));
                 result.Add(r);
             }
-            return result.ToArray();  
+            return result.ToArray();
         }
 
         public Triple[] Connections(INode s, INode o)
@@ -109,12 +110,12 @@ namespace k2extensionsLib
                 {
                     return new Triple[0];
                 }
-                else if(i!=positionInSubjects.Length-1)
+                else if (i != positionInSubjects.Length - 1)
                 {
                     position = nodes.Rank1(position) * k * k;
                 }
             }
-            var result = getLabelFormLeafPosition(position).Select(x=>new Triple(s,x,o));         
+            var result = getLabelFormLeafPosition(position).Select(x => new Triple(s, x, o));
             return result.ToArray();
         }
 
@@ -127,7 +128,7 @@ namespace k2extensionsLib
                 for (int j = 0; j < k; j++)
                 {
                     int relativePosition = k * i + j;
-                    result.AddRange(decompRec(relativePosition, new List<int>() { i }, new List<int>() { j}));
+                    result.AddRange(decompRec(relativePosition, new List<int>() { i }, new List<int>() { j }));
 
                 }
             }
@@ -165,7 +166,7 @@ namespace k2extensionsLib
             for (int i = 0; i < k; i++)
             {
                 int relativePosition = position[0] * k + i;
-                result.AddRange(precOrSuccRec(s, relativePosition, position.Skip(1).ToArray(), new List<int>() { i}, true));
+                result.AddRange(precOrSuccRec(s, relativePosition, position.Skip(1).ToArray(), new List<int>() { i }, true));
 
             }
             return result.ToArray();
@@ -180,10 +181,10 @@ namespace k2extensionsLib
         {
             List<Triple> result = new List<Triple>();
 
-            if(searchPath.Length == 0 && nodes[positionInNodes])
+            if (searchPath.Length == 0 && nodes[positionInNodes])
             {
                 result.AddRange(getLabelFormLeafPosition(positionInNodes).Select(
-                    x => searchObj ? new Triple( n, x, Objects.ElementAt(parentPath.FromBase(k))):
+                    x => searchObj ? new Triple(n, x, Objects.ElementAt(parentPath.FromBase(k))) :
                         new Triple(Subjects.ElementAt(parentPath.FromBase(k)), x, n)));
             }
             else if (!nodes[positionInNodes])
@@ -194,18 +195,18 @@ namespace k2extensionsLib
             {
                 int p = searchPath[0];
                 searchPath = searchPath.Skip(1).ToArray();
-                positionInNodes = nodes.Rank1(positionInNodes) * k * k ;
+                positionInNodes = nodes.Rank1(positionInNodes) * k * k;
                 for (int i = 0; i < k; i++)
                 {
-                    int relativePosition = searchObj ? p*k+i : i * k + p;
+                    int relativePosition = searchObj ? p * k + i : i * k + p;
                     result.AddRange(precOrSuccRec(n, positionInNodes + relativePosition, searchPath, parentPath.Append(i).ToList(), searchObj));
                 }
-                
+
             }
             return result.ToArray();
         }
 
-        private (int[], int[]) getKBasedPosition(INode subj, INode obj) 
+        private (int[], int[]) getKBasedPosition(INode subj, INode obj)
         {
             int[] positionInSubjects = Array.IndexOf(Subjects.ToArray(), subj).ToBase(k);
             int[] positionInObjects = Array.IndexOf(Objects.ToArray(), obj).ToBase(k);
@@ -268,7 +269,7 @@ namespace k2extensionsLib
             {
                 for (int j = 63; j >= 0; j--)
                 {
-                    if((block & ((ulong)1 << j)) != 0)
+                    if ((block & ((ulong)1 << j)) != 0)
                     {
                         result.Add(Predicates.ElementAt(position));
                     }
@@ -287,7 +288,7 @@ namespace k2extensionsLib
         /// </summary>
         /// <param name="position"></param>
         /// <returns></returns>
-        private Tuple<int,int> getCell(int position)
+        private Tuple<int, int> getCell(int position)
         {
             int power = 1;
             int col = 0;
@@ -325,8 +326,8 @@ namespace k2extensionsLib
                     for (int j = 0; j < k; j++)
                     {
                         IEnumerable<INode> triples = new List<INode>();
-                        if(row + i < Subjects.Count() && col+j<Objects.Count())
-                           triples = graph.GetTriplesWithSubjectObject(Subjects.ElementAt(row+i), Objects.ElementAt(col+j)).Select(x=>x.Predicate);
+                        if (row + i < Subjects.Count() && col + j < Objects.Count())
+                            triples = graph.GetTriplesWithSubjectObject(Subjects.ElementAt(row + i), Objects.ElementAt(col + j)).Select(x => x.Predicate);
 
                         BitArray label = new BitArray(Predicates.Count(), false);
                         for (int l = 0; l < Predicates.Count(); l++)
@@ -334,7 +335,8 @@ namespace k2extensionsLib
                             if (triples.Contains(Predicates.ElementAt(l))) label[l] = true;
                         }
 
-                        if (label.Cast<bool>().Any(x => x == true)) {
+                        if (label.Cast<bool>().Any(x => x == true))
+                        {
                             submatrix[index] = true;
                             additionalLabels.AddRange(label);
                         }
@@ -373,7 +375,7 @@ namespace k2extensionsLib
 
         public void Store(string filename)
         {
-            using(var sw = File.CreateText(filename))
+            using (var sw = File.CreateText(filename))
             {
                 sw.WriteLine(startLeaves);
                 sw.WriteLine(nodes.GetDataAsString());
@@ -383,8 +385,8 @@ namespace k2extensionsLib
                 {
                     var so = Subjects.Intersect(Objects);
                     sw.WriteLine(string.Join(" ", so));
-                    sw.WriteLine(string.Join(" ", Subjects.Where(x=>!so.Contains(x))));
-                    sw.WriteLine(string.Join(" ", Objects.Where(x=>!so.Contains(x))));
+                    sw.WriteLine(string.Join(" ", Subjects.Where(x => !so.Contains(x))));
+                    sw.WriteLine(string.Join(" ", Objects.Where(x => !so.Contains(x))));
                 }
                 else
                 {
@@ -405,7 +407,7 @@ namespace k2extensionsLib
                 line = sr.ReadLine() ?? "";
                 labels.Store(line);
                 line = sr.ReadLine() ?? "";
-                Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x));             
+                Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
                 if (useK2Triple)
                 {
                     line = sr.ReadLine() ?? "";
@@ -420,7 +422,161 @@ namespace k2extensionsLib
                     line = sr.ReadLine() ?? "";
                     Subjects = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
                     Objects = Subjects;
-                }                            
+                }
+            }
+        }
+    }
+
+    public class k3 : IK2Extension
+    {
+        public IEnumerable<INode> Subjects { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public IEnumerable<INode> Objects { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public IEnumerable<INode> Predicates { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+        FastRankBitArray t { get; set; }
+        bool useK2Triples { get; set; }
+        int k { get; set; }
+
+
+        public k3(int k)
+        {
+            this.k = k;
+            t = new FastRankBitArray();
+            Subjects = new List<INode>();
+            Predicates = new List<INode>();
+            Objects = new List<INode>();
+            useK2Triples = false;
+        }
+
+        public Triple[] AllEdgesOfType(INode p)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Compress(IGraph graph, bool useK2Triples)
+        {
+            DynamicBitArray[] dynT = new DynamicBitArray[0];
+            this.useK2Triples = useK2Triples;
+            Subjects = graph.Triples.Select(x => x.Subject).Distinct();
+            Objects = graph.Triples.Select(x => x.Object).Distinct();
+            if (useK2Triples)
+            {
+                var so = Subjects.Intersect(Objects);
+                Subjects = so.Concat(Subjects.Where(x => !so.Contains(x))).ToList();
+                Objects = so.Concat(Objects.Where(x => !so.Contains(x))).ToList();
+            }
+            else
+            {
+                Subjects = Subjects.Concat(Objects).Distinct();
+                Objects = Subjects;
+            }
+            Predicates = graph.Triples.Select(x => x.Predicate).Distinct();
+
+            int size = Math.Max(Math.Max(Subjects.Count(), Objects.Count()), Predicates.Count());
+            int N = k;
+            while (N < size) N *= k;
+
+            compressRec(ref dynT, 0, graph, 0, 0, 0, N);
+
+            DynamicBitArray n = new DynamicBitArray();
+            foreach (var l in dynT)
+            {
+                n.AddRange(l.GetFittedArray());
+            }
+            t = new FastRankBitArray(n.GetFittedArray());
+        }
+
+        
+
+        public Triple[] Connections(INode s, INode o)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Triple[] Decomp()
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool Exists(INode s, INode p, INode o)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Load(string filename, bool useK2Triple)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Triple[] Prec(INode o)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Triple[] PrecOfType(INode o, INode p)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Store(string filename)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Triple[] Succ(INode s)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Triple[] SuccOfType(INode s, INode p)
+        {
+            throw new NotImplementedException();
+        }
+
+        private bool compressRec(ref DynamicBitArray[] levels, int level, IGraph graph, int posSubj, int posPred, int posObj, int N)
+        {
+            while (levels.Length <= level) levels = levels.Append(new DynamicBitArray()).ToArray();
+            var submatrix = new BitArray((int)Math.Pow(k, 3));
+            if (N == k)
+            {
+                int index = 0;
+                DynamicBitArray additionalLabels = new DynamicBitArray();
+                for (int o = 0; o < k; o++)
+                {
+                    for (int p = 0; p < k; p++)
+                    {
+                        for (int s = 0; s < k; s++)
+                        {
+                            submatrix[index] = graph.GetTripleNode(new Triple(Subjects.ElementAt(posSubj + s), Predicates.ElementAt(posPred + p), Objects.ElementAt(posObj + o))) != null;
+                            index++;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                int NextN = N / k;
+                int index = 0;
+                for (int o = 0; o < k; o++)
+                {
+                    for (int p = 0; p < k; p++)
+                    {
+                        for (int s = 0; s < k; s++)
+                        {
+                            submatrix[index] = compressRec(ref levels, level + 1, graph, posSubj + s * NextN, posPred + p * NextN, posObj + o * NextN, NextN);
+                            index++;
+                        }
+                    }
+                }
+            }
+            if (submatrix.Cast<bool>().Any(x => x == true))
+            {
+                levels[level].AddRange(submatrix);
+                return true;
+            }
+            else
+            {
+                return false;
             }
         }
     }

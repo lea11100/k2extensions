@@ -1,4 +1,5 @@
 ﻿using J2N.Collections.Generic.Extensions;
+using Lucene.Net.Analysis.Miscellaneous;
 using Lucene.Net.Util;
 using System;
 using System.Collections;
@@ -302,18 +303,24 @@ namespace k2extensionsLib
             return result;
         }
 
-        internal static int[] ToBase(this int value, int baseSize)
+        internal static int[] ToBase(this int value, int baseSize, int length = 0)
         {
             Stack<int> digits = new Stack<int>();
-
+            int[] result;
             long tmp = value;
             while (tmp != 0)
             {
                 digits.Push((int)(tmp % baseSize));
                 tmp = (long)((tmp - digits.Peek()) / baseSize);
             }
-
-            return digits.ToArray();
+            if (length != 0)
+            {
+                result = new int[length];
+                digits.ToArray().CopyTo(result, length - digits.Count);
+            }
+            else
+                result = digits.ToArray();
+            return result;
         }
 
         internal static int FromBase(this IEnumerable<int> value, int baseSize)

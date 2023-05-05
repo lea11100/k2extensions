@@ -16,7 +16,7 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace k2extensionsLib
 {
-    public class k2ArrayIndex : IK2Extension
+    public class K2ArrayIndex : IK2Extension
     {
         FastRankBitArray nodes { get; set; }
         FastRankBitArray labels { get; set; }
@@ -27,7 +27,7 @@ namespace k2extensionsLib
         public IEnumerable<INode> Objects { get; set; }
         public IEnumerable<INode> Predicates { get; set; }
 
-        public k2ArrayIndex(int k)
+        public K2ArrayIndex(int k)
         {
             this.k = k;
             useK2Triples = false;
@@ -367,6 +367,17 @@ namespace k2extensionsLib
 
         public void Store(string filename)
         {
+            //using (var s = File.Open(filename, FileMode.Create))
+            //{
+            //    using (var bw = new BinaryWriter(s,Encoding.UTF8))
+            //    {
+            //        bw.Write(startLeaves);
+            //        bw.Write(startLeaves);
+            //        bw.Write(nodes.GetDataAsString());
+            //        bw.Write(labels.GetDataAsString());
+            //        bw.Write(string.Join(" ", Predicates));
+            //    }
+            //}
             using (var sw = File.CreateText(filename))
             {
                 sw.WriteLine(startLeaves);
@@ -419,11 +430,11 @@ namespace k2extensionsLib
         }
     }
 
-    public class k3 : IK2Extension
+    public class K3 : IK2Extension
     {
-        public IEnumerable<INode> Subjects { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
-        public IEnumerable<INode> Objects { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
-        public IEnumerable<INode> Predicates { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public IEnumerable<INode> Subjects { get; set; }
+        public IEnumerable<INode> Objects { get; set; }
+        public IEnumerable<INode> Predicates { get; set; }
 
         FastRankBitArray t { get; set; }
         bool useK2Triples { get; set; }
@@ -437,7 +448,7 @@ namespace k2extensionsLib
         }
 
 
-        public k3(int k)
+        public K3(int k)
         {
             this.k = k;
             t = new FastRankBitArray();
@@ -449,7 +460,7 @@ namespace k2extensionsLib
 
         public Triple[] AllEdgesOfType(INode p)
         {
-            (int?, int?, int?)[] path = Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length - 1)
+            (int?, int?, int?)[] path = Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length)
                 .Select<int, (int?, int?, int?)>(x => (null, x, null)).ToArray();
             List<Triple> result = new List<Triple>();
             for (int o = 0; o < k; o++)
@@ -467,9 +478,7 @@ namespace k2extensionsLib
             }
             return result.ToArray();
         }
-
-
-
+  
         public void Compress(IGraph graph, bool useK2Triples)
         {
             DynamicBitArray[] dynT = new DynamicBitArray[0];
@@ -503,12 +512,10 @@ namespace k2extensionsLib
             t = new FastRankBitArray(n.GetFittedArray());
         }
 
-
-
         public Triple[] Connections(INode s, INode o)
         {
-            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
-                                         from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+                                         from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
                                          where subj.i == obj.i
                                          select ((int?)subj.v, (int?)null, (int?)obj.v)).ToArray();
 
@@ -527,7 +534,7 @@ namespace k2extensionsLib
 
         public Triple[] Decomp()
         {
-            (int?, int?, int?)[] path = new (int?, int?, int?)[size.ToBase(k).Length - 1];
+            (int?, int?, int?)[] path = new (int?, int?, int?)[size.ToBase(k).Length];
             Array.Fill(path, (null, null, null));
             List<Triple> result = new List<Triple>();
             for (int o = 0; o < k; o++)
@@ -549,9 +556,9 @@ namespace k2extensionsLib
 
         public bool Exists(INode s, INode p, INode o)
         {
-            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
-                                         from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
-                                         from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+                                         from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+                                         from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
                                          where subj.i == obj.i && obj.i == pred.i
                                          select ((int?)subj.v, (int?)pred.v, (int?)obj.v)).ToArray();
 
@@ -567,12 +574,34 @@ namespace k2extensionsLib
 
         public void Load(string filename, bool useK2Triple)
         {
-            throw new NotImplementedException();
+            using (var sr = new StreamReader(filename))
+            {
+                string line = sr.ReadLine() ?? "";
+                NodeFactory nf = new NodeFactory(new NodeFactoryOptions());
+                t.Store(line);
+                line = sr.ReadLine() ?? "";
+                Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
+                if (useK2Triple)
+                {
+                    line = sr.ReadLine() ?? "";
+                    var so = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
+                    line = sr.ReadLine() ?? "";
+                    Subjects = so.Concat(line.Split(" ").Select(x => nf.CreateLiteralNode(x)));
+                    line = sr.ReadLine() ?? "";
+                    Objects = so.Concat(line.Split(" ").Select(x => nf.CreateLiteralNode(x)));
+                }
+                else
+                {
+                    line = sr.ReadLine() ?? "";
+                    Subjects = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
+                    Objects = Subjects;
+                }
+            }
         }
 
         public Triple[] Prec(INode o)
         {
-            (int?, int?, int?)[] path = (from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+            (int?, int?, int?)[] path = (from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
                                          select ((int?)null, (int?)null, (int?)obj.v)).ToArray();
 
 
@@ -593,8 +622,8 @@ namespace k2extensionsLib
 
         public Triple[] PrecOfType(INode o, INode p)
         {
-            (int?, int?, int?)[] path = (from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
-                                         from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+            (int?, int?, int?)[] path = (from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+                                         from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
                                          where pred.i == obj.i
                                          select ((int?)null, (int?)pred.v, (int?)obj.v)).ToArray();
 
@@ -613,13 +642,28 @@ namespace k2extensionsLib
 
         public void Store(string filename)
         {
-            throw new NotImplementedException();
+            using (var sw = File.CreateText(filename))
+            {
+                sw.WriteLine(t.GetDataAsString());
+                sw.WriteLine(string.Join(" ", Predicates));
+                if (useK2Triples)
+                {
+                    var so = Subjects.Intersect(Objects);
+                    sw.WriteLine(string.Join(" ", so));
+                    sw.WriteLine(string.Join(" ", Subjects.Where(x => !so.Contains(x))));
+                    sw.WriteLine(string.Join(" ", Objects.Where(x => !so.Contains(x))));
+                }
+                else
+                {
+                    sw.WriteLine(string.Join(" ", Subjects));
+                }
+            }
         }
 
         public Triple[] Succ(INode s)
         {
-            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
-                                         select ((int?)null, (int?)null, (int?)subj.v)).ToArray();
+            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+                                         select ((int?)subj.v, (int?)null, (int?)null)).ToArray();
             List<Triple> result = new List<Triple>();
             for (int o = 0; o < k; o++)
             {
@@ -631,7 +675,7 @@ namespace k2extensionsLib
                     result.AddRange(
                                 findNodesRec(relativePosition,
                                 path.Skip(1).ToArray(),
-                                new List<(int, int, int)>() { (path[0].Item1 ?? 0, p, 0) }));
+                                new List<(int, int, int)>() { (path[0].Item1 ?? 0, p, o) }));
                 }
             }
             return result.ToArray();
@@ -640,8 +684,8 @@ namespace k2extensionsLib
         public Triple[] SuccOfType(INode s, INode p)
         {
                                          
-            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
-                                         from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length - 1).Select((v, i) => (v, i))
+            (int?, int?, int?)[] path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+                                         from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
                                          where pred.i == subj.i
                                          select ((int?)subj.v, (int?)pred.v, (int?)null)).ToArray();
 
@@ -672,7 +716,10 @@ namespace k2extensionsLib
                     {
                         for (int s = 0; s < k; s++)
                         {
-                            submatrix[index] = graph.GetTripleNode(new Triple(Subjects.ElementAt(posSubj + s), Predicates.ElementAt(posPred + p), Objects.ElementAt(posObj + o))) != null;
+                            if (posSubj + s >= Subjects.Count() || posPred + p >= Predicates.Count() || posObj + o >= Objects.Count())
+                                submatrix[index] = false;
+                            else
+                                submatrix[index] = graph.Triples.Any(x=>x.Subject.Equals(Subjects.ElementAt(posSubj + s)) && x.Predicate.Equals(Predicates.ElementAt(posPred + p)) && x.Object.Equals(Objects.ElementAt(posObj+o)));
                             index++;
                         }
                     }
@@ -725,11 +772,11 @@ namespace k2extensionsLib
                 (int?, int?, int?) position = searchPath[0];
                 searchPath = searchPath.Skip(1).ToArray();
                 positionInNodes = t.Rank1(positionInNodes) * k * k * k;
-                for (int o = position.Item3 ?? 0; o < (position.Item3 ?? k); o++)
+                for (int o = position.Item3 ?? 0; o < (position.Item3+1 ?? k); o++)
                 {
-                    for (int p = position.Item2 ?? 0; p < (position.Item2 ?? k); p++)
+                    for (int p = position.Item2 ?? 0; p < (position.Item2+1 ?? k); p++)
                     {
-                        for (int s = position.Item1 ?? 0; s < (position.Item1 ?? k); s++)
+                        for (int s = position.Item1 ?? 0; s < (position.Item1+1 ?? k); s++)
                         {
                             int relativePosition = o * k * k + p * k + s;
                             result.AddRange(findNodesRec(positionInNodes + relativePosition, searchPath, parentPath.Append((s, p, o)).ToList()));
@@ -739,6 +786,82 @@ namespace k2extensionsLib
 
             }
             return result.ToArray();
+        }
+    }
+
+    public class IK2 : IK2Extension
+    {
+        public IEnumerable<INode> Subjects { get; set; }
+        public IEnumerable<INode> Objects { get; set; }
+        public IEnumerable<INode> Predicates { get; set; }
+
+        FastRankBitArray t { get; set; }
+        bool useK2Triples { get; set; }
+        int k { get; set; }
+
+        public IK2(int k)
+        {
+            this.k = k;
+            t = new FastRankBitArray();
+            Subjects = new List<INode>();
+            Predicates = new List<INode>();
+            Objects = new List<INode>();
+            useK2Triples = false;
+        }
+
+        public Triple[] AllEdgesOfType(INode p)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Compress(IGraph graph, bool useK2Triples)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Triple[] Connections(INode s, INode o)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Triple[] Decomp()
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool Exists(INode s, INode p, INode o)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Load(string filename, bool useK2Triple)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Triple[] Prec(INode o)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Triple[] PrecOfType(INode o, INode p)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Store(string filename)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Triple[] Succ(INode s)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Triple[] SuccOfType(INode s, INode p)
+        {
+            throw new NotImplementedException();
         }
     }
 }

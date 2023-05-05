@@ -45,7 +45,7 @@ namespace k2extensionsLib
             var testResExists = correctValues.Item1;
             var testRes = correctValues.Item2;
             var uncompressedSize = new FileInfo(fileName).Length;
-            string result = "Name;Compression;SPO;SP?O;SP?O?;S?P?O;S?PO?;S?PO;SPO?;Compression ratio\r\n";
+            string result = "Name;Compression;SPO;SP?O;SP?O?;S?P?O;S?PO?;S?PO;SPO?;S?P?O?;Compression ratio\r\n";
             List<List<double>> timeResults = new List<List<double>>();
             for (int i = 0; i < 7; i++)
             {

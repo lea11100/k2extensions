@@ -74,7 +74,6 @@ namespace k2extensionsLib
 
             this.labels = new FastRankBitArray(labels.GetFittedArray());
             DynamicBitArray n = new DynamicBitArray();
-            n[0] = true;
             foreach (var l in levels.Take(levels.Length - 1))
             {
                 n.AddRange(l.GetFittedArray());
@@ -288,33 +287,30 @@ namespace k2extensionsLib
         private Triple[] findNodesRec(int positionInNodes, (int?, int?)[] searchPath, INode? predicate, List<(int, int)> parentPath)
         {
             List<Triple> result = new List<Triple>();
-
-            if (searchPath.Length == 0 && t[positionInNodes])
+            (int?, int?) position = searchPath[0];
+            searchPath = searchPath.Skip(1).ToArray();
+            for (int s = position.Item1 ?? 0; s < (position.Item1 + 1 ?? k); s++)
             {
-                int posS = parentPath.Select(x => x.Item1).FromBase(k);
-                int posO = parentPath.Select(x => x.Item2).FromBase(k);
-                INode[] preds = getLabelFormLeafPosition(positionInNodes);
-                if (predicate != null) preds = preds.Where(x => x.Equals(predicate)).ToArray();
-                if (preds.Length != 0) result.AddRange(preds.Select(x => new Triple(Subjects.ElementAt(posS), x, Objects.ElementAt(posO))));
-            }
-            else if (!t[positionInNodes])
-            {
-                return result.ToArray();
-            }
-            else
-            {
-                (int?, int?) position = searchPath[0];
-                searchPath = searchPath.Skip(1).ToArray();
-                positionInNodes = t.Rank1(positionInNodes) * k * k;
-                for (int s = position.Item1 ?? 0; s < (position.Item1 + 1 ?? k); s++)
+                for (int o = position.Item2 ?? 0; o < (position.Item2 + 1 ?? k); o++)
                 {
-                    for (int o = position.Item2 ?? 0; o < (position.Item2 + 1 ?? k); o++)
+                    int relativePosition = s * k + o;
+                    int pos = positionInNodes + relativePosition;
+                    List<(int, int)> parent = parentPath.Append((s, o)).ToList();
+                    if (searchPath.Length == 0 && t[pos])
                     {
-                        int relativePosition = s * k + o;
-                        result.AddRange(findNodesRec(positionInNodes + relativePosition, searchPath, predicate, parentPath.Append((s, o)).ToList()));
+                        //pos = t.Rank1(pos) * k * k;
+                        int posS = parent.Select(x => x.Item1).FromBase(k);
+                        int posO = parent.Select(x => x.Item2).FromBase(k);
+                        INode[] preds = getLabelFormLeafPosition(pos);
+                        if (predicate != null) preds = preds.Where(x => x.Equals(predicate)).ToArray();
+                        if (preds.Length != 0) result.AddRange(preds.Select(x => new Triple(Subjects.ElementAt(posS), x, Objects.ElementAt(posO))));
+                    }
+                    else if (t[pos])
+                    {
+                        pos = t.Rank1(pos) * k * k;
+                        result.AddRange(findNodesRec(pos, searchPath, predicate, parent));
                     }
                 }
-
             }
             return result.ToArray();
         }
@@ -446,7 +442,6 @@ namespace k2extensionsLib
             compressRec(ref dynT, 0, graph, 0, 0, 0, N);
 
             DynamicBitArray n = new DynamicBitArray();
-            n[0] = true;
             foreach (var l in dynT)
             {
                 n.AddRange(l.GetFittedArray());
@@ -581,11 +576,11 @@ namespace k2extensionsLib
             if (N == k)
             {
                 int index = 0;
-                for (int o = 0; o < k; o++)
+                for (int s = 0; s < k; s++)
                 {
                     for (int p = 0; p < k; p++)
                     {
-                        for (int s = 0; s < k; s++)
+                        for (int o = 0; o < k; o++)
                         {
                             if (posSubj + s >= Subjects.Count() || posPred + p >= Predicates.Count() || posObj + o >= Objects.Count())
                                 submatrix[index] = false;
@@ -600,11 +595,11 @@ namespace k2extensionsLib
             {
                 int NextN = N / k;
                 int index = 0;
-                for (int o = 0; o < k; o++)
+                for (int s = 0; s < k; s++)
                 {
                     for (int p = 0; p < k; p++)
                     {
-                        for (int s = 0; s < k; s++)
+                        for (int o = 0; o < k; o++)
                         {
                             submatrix[index] = compressRec(ref levels, level + 1, graph, posSubj + s * NextN, posPred + p * NextN, posObj + o * NextN, NextN);
                             index++;
@@ -626,35 +621,31 @@ namespace k2extensionsLib
         private Triple[] findNodesRec(int positionInNodes, (int?, int?, int?)[] searchPath, List<(int, int, int)> parentPath)
         {
             List<Triple> result = new List<Triple>();
-
-            if (searchPath.Length == 0 && t[positionInNodes])
+            (int?, int?, int?) position = searchPath[0];
+            searchPath = searchPath.Skip(1).ToArray();
+            for (int s = position.Item1 ?? 0; s < (position.Item1 + 1 ?? k); s++)
             {
-                int posS = parentPath.Select(x => x.Item1).FromBase(k);
-                int posP = parentPath.Select(x => x.Item2).FromBase(k);
-                int posO = parentPath.Select(x => x.Item3).FromBase(k);
-                result.Add(new Triple(Subjects.ElementAt(posS), Predicates.ElementAt(posP), Objects.ElementAt(posO)));
-            }
-            else if (!t[positionInNodes])
-            {
-                return result.ToArray();
-            }
-            else
-            {
-                (int?, int?, int?) position = searchPath[0];
-                searchPath = searchPath.Skip(1).ToArray();
-                positionInNodes = t.Rank1(positionInNodes) * k * k * k;
-                for (int o = position.Item3 ?? 0; o < (position.Item3 + 1 ?? k); o++)
+                for (int p = position.Item2 ?? 0; p < (position.Item2 + 1 ?? k); p++)
                 {
-                    for (int p = position.Item2 ?? 0; p < (position.Item2 + 1 ?? k); p++)
+                    for (int o = position.Item3 ?? 0; o < (position.Item3 + 1 ?? k); o++)
                     {
-                        for (int s = position.Item1 ?? 0; s < (position.Item1 + 1 ?? k); s++)
+                        int relativePosition = s * k * k + p * k + o;
+                        int pos = positionInNodes + relativePosition;
+                        List<(int, int, int)> parent = parentPath.Append((s, p, o)).ToList();
+                        if (searchPath.Length == 0 && t[pos])
                         {
-                            int relativePosition = o * k * k + p * k + s;
-                            result.AddRange(findNodesRec(positionInNodes + relativePosition, searchPath, parentPath.Append((s, p, o)).ToList()));
+                            int posS = parent.Select(x => x.Item1).FromBase(k);
+                            int posP = parent.Select(x => x.Item2).FromBase(k);
+                            int posO = parent.Select(x => x.Item3).FromBase(k);
+                            result.Add(new Triple(Subjects.ElementAt(posS), Predicates.ElementAt(posP), Objects.ElementAt(posO)));
+                        }
+                        else if (t[pos])
+                        {
+                            pos = t.Rank1(pos) * k * k * k;
+                            result.AddRange(findNodesRec(pos, searchPath, parent));
                         }
                     }
                 }
-
             }
             return result.ToArray();
         }
@@ -715,12 +706,11 @@ namespace k2extensionsLib
                 DynamicBitArray[] dynTForPred = new DynamicBitArray[0];
                 compressForPredicateRec(ref dynTForPred, pred, 0, graph, 0, 0, N);
                 DynamicBitArray flatT = new DynamicBitArray();
-                flatT[0] = true;
                 for (int i = 0; i < dynTForPred.Length; i++)
                 {
                     flatT.AddRange(dynTForPred[i].GetFittedArray());
                 }
-                t.Add(pred,new FastRankBitArray(flatT.GetFittedArray()));
+                t.Add(pred, new FastRankBitArray(flatT.GetFittedArray()));
             }
         }
 
@@ -863,7 +853,7 @@ namespace k2extensionsLib
                 string line = sr.ReadLine() ?? "";
                 NodeFactory nf = new NodeFactory(new NodeFactoryOptions());
                 List<FastRankBitArray> l = new List<FastRankBitArray>();
-                while(line != "Tree stop")
+                while (line != "Tree stop")
                 {
                     l.Add(new FastRankBitArray());
                     l[^1].Store(line);
@@ -871,9 +861,9 @@ namespace k2extensionsLib
                 }
                 line = sr.ReadLine() ?? "";
                 Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
-                foreach (var (pred,index) in Predicates.Select((v, i) => (v, i)))
+                foreach (var (pred, index) in Predicates.Select((v, i) => (v, i)))
                 {
-                    t.Add(pred,l[index]);
+                    t.Add(pred, l[index]);
                 }
                 if (useK2Triple)
                 {
@@ -896,8 +886,8 @@ namespace k2extensionsLib
         public void Store(string filename)
         {
             using (var sw = File.CreateText(filename))
-            {             
-                foreach(var (k,v) in t)
+            {
+                foreach (var (k, v) in t)
                 {
                     sw.WriteLine(v.GetDataAsString());
                 }
@@ -920,32 +910,30 @@ namespace k2extensionsLib
         private Triple[] findNodesRec(INode predicate, int positionInNodes, (int?, int?)[] searchPath, List<(int, int)> parentPath)
         {
             List<Triple> result = new List<Triple>();
-
-            if (searchPath.Length == 0 && t[predicate][positionInNodes])
+            (int?, int?) position = searchPath[0];
+            searchPath = searchPath.Skip(1).ToArray();
+            for (int s = position.Item1 ?? 0; s < (position.Item1 + 1 ?? k); s++)
             {
-                int posS = parentPath.Select(x => x.Item1).FromBase(k);
-                int posO = parentPath.Select(x => x.Item2).FromBase(k);
-                result.Add(new Triple(Subjects.ElementAt(posS), predicate, Objects.ElementAt(posO)));
-            }
-            else if (!t[predicate][positionInNodes])
-            {
-                return result.ToArray();
-            }
-            else
-            {
-                (int?, int?) position = searchPath[0];
-                searchPath = searchPath.Skip(1).ToArray();
-                positionInNodes = t[predicate].Rank1(positionInNodes) * k * k;
-                for (int s = position.Item1 ?? 0; s < (position.Item1 + 1 ?? k); s++)
+                for (int o = position.Item2 ?? 0; o < (position.Item2 + 1 ?? k); o++)
                 {
-                    for (int o = position.Item2 ?? 0; o < (position.Item2 + 1 ?? k); o++)
+                    int relativePosition = s * k * k + o;
+                    int pos = positionInNodes + relativePosition;
+                    List<(int, int)> parent = parentPath.Append((s, o)).ToList();
+                    if (searchPath.Length == 0 && t[predicate][pos])
                     {
-                        int relativePosition = s * k * k + o;
-                        result.AddRange(findNodesRec(predicate, positionInNodes + relativePosition, searchPath, parentPath.Append((s, o)).ToList()));
+                        int posS = parent.Select(x => x.Item1).FromBase(k);
+                        int posO = parent.Select(x => x.Item2).FromBase(k);
+                        result.Add(new Triple(Subjects.ElementAt(posS), predicate, Objects.ElementAt(posO)));
+                    }
+                    else if (t[predicate][pos])
+                    {
+                        pos = t[predicate].Rank1(pos) * k * k;
+
+                        result.AddRange(findNodesRec(predicate, pos, searchPath, parent));
+
                     }
                 }
-
-            }
+            }        
             return result.ToArray();
         }
     }

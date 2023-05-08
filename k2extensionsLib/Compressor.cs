@@ -737,15 +737,12 @@ namespace k2extensionsLib
             {
                 int NextN = N / k;
                 int index = 0;
-                for (int o = 0; o < k; o++)
+                for (int s = 0; s < k; s++)
                 {
-                    for (int p = 0; p < k; p++)
+                    for (int o = 0; o < k; o++)
                     {
-                        for (int s = 0; s < k; s++)
-                        {
-                            submatrix[index] = compressForPredicateRec(ref levels, predicate, level + 1, graph, posSubj + s * NextN, posObj + o * NextN, NextN);
-                            index++;
-                        }
+                        submatrix[index] = compressForPredicateRec(ref levels, predicate, level + 1, graph, posSubj + s * NextN, posObj + o * NextN, NextN);
+                        index++;
                     }
                 }
             }
@@ -916,7 +913,7 @@ namespace k2extensionsLib
             {
                 for (int o = position.Item2 ?? 0; o < (position.Item2 + 1 ?? k); o++)
                 {
-                    int relativePosition = s * k * k + o;
+                    int relativePosition = s * k + o;
                     int pos = positionInNodes + relativePosition;
                     List<(int, int)> parent = parentPath.Append((s, o)).ToList();
                     if (searchPath.Length == 0 && t[predicate][pos])
@@ -933,7 +930,7 @@ namespace k2extensionsLib
 
                     }
                 }
-            }        
+            }
             return result.ToArray();
         }
     }

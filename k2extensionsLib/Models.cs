@@ -15,88 +15,84 @@ using VDS.RDF;
 
 namespace k2extensionsLib
 {
-    internal class DynamicBitArray : IList<bool>
+    public class TreeNode
     {
-        BitArray data { get; set; } = new BitArray(128, false);
-        int lastIndex { get; set; } = 0;
+        public TreeNode[] Children { get; set; }
 
-        public bool this[int index] { get => data[index]; set => data[index] = value; }
-
-        public int Count => data.Count;
-
-        public bool IsReadOnly => data.IsReadOnly;
-
-        public void Add(bool item)
+        public TreeNode(int children = 4)
         {
-            if (lastIndex >= data.Count)
-                data.Length += 128;
-            data[lastIndex] = item;
-            lastIndex++;
+            Children = new TreeNode[children];
         }
 
-        public void AddRange(BitArray array)
+        public TreeNode SetChild(int index, TreeNode child)
         {
-            for (int i = 0; i < array.Length; i++)
+            Children[index] = Children[index] ?? child;
+            return Children[index];
+        }
+
+        public TreeNode GetChild(int index)
+        {
+            return Children[index];
+        }
+    }
+
+    internal class DynamicBitArray
+    {
+        internal List<ulong> data { get; set; } = new List<ulong>() { 0 };
+        internal int firstFreeIndex { get; set; } = 0;
+
+        public bool this[int index] { get => (data[index/64] & ((ulong)1<<(index%64))) != 0; set => data[index/64] += (ulong)1<<(index%64); }
+
+        public void AddRange(uint array, int length)
+        {
+            //array <<= 32 - length;
+            ulong firstPart = (ulong)array << 32 >>> firstFreeIndex;
+            ulong secondPart = (ulong)array << (32 + (64 - firstFreeIndex));
+            data[^1] += firstPart;
+            firstFreeIndex += length;
+            if (firstFreeIndex >= 64)
             {
-                Add(array[i]);
+                data.Add(secondPart);
+            }
+            firstFreeIndex %= 64;           
+        }
+
+        public void AddRange(ulong array, int length)
+        {
+            ulong firstPart = array >>> firstFreeIndex;
+            ulong secondPart = 0;
+            if (firstFreeIndex != 0)
+                secondPart = array << (64 - firstFreeIndex);
+            data[^1] += firstPart;
+            firstFreeIndex += length;
+            if (firstFreeIndex >= 64)
+            {
+                data.Add(secondPart);
+            }
+            firstFreeIndex %= 64;
+        }
+
+        public void AddRange(DynamicBitArray array)
+        {
+            foreach (ulong item in array.data.Take(array.data.Count - 1))
+            {
+                AddRange(item, 64);
+            }
+            if (array.firstFreeIndex != 0)
+            {
+                AddRange(array.data[^1], array.firstFreeIndex);
             }
         }
 
-        public void Clear()
+        public string GetAsString()
         {
-            data = new BitArray(128, false);
-            lastIndex = 0;
-        }
-
-        public bool Contains(bool item)
-        {
-            return data.Cast<bool>().Contains(item);
-        }
-
-        public void CopyTo(bool[] array, int arrayIndex)
-        {
-            data.CopyTo(array, arrayIndex);
-        }
-
-        public IEnumerator<bool> GetEnumerator()
-        {
-            return data.Cast<bool>().GetEnumerator();
-        }
-
-        public int IndexOf(bool item)
-        {
-            return data.Cast<bool>().ToList().IndexOf(item);
-        }
-
-        public void Insert(int index, bool item)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool Remove(bool item)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void RemoveAt(int index)
-        {
-            throw new NotImplementedException();
-        }
-
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            return data.GetEnumerator();
-        }
-
-        public BitArray GetFittedArray()
-        {
-            shrink();
-            return data;
-        }
-
-        private void shrink()
-        {
-            data.Length = lastIndex;
+            var res = "";
+            foreach(ulong d in data.Take(data.Count - 1))
+            {
+                res += Convert.ToString((long)d, 2).PadLeft(64, '0');
+            }
+            res += Convert.ToString((long)data[^1], 2).PadLeft(64,'0').Substring(0,firstFreeIndex);
+            return res;
         }
     }
 
@@ -111,29 +107,12 @@ namespace k2extensionsLib
             oneCounter = new int[0];
         }
 
-        internal FastRankBitArray(BitArray array)
+        internal FastRankBitArray(DynamicBitArray array)
         {
-            data = new ulong[0];
-            oneCounter = new int[0];
-            Store(array);
-        }
-
-        internal void Store(BitArray array)
-        {
-            data = new ulong[(int)Math.Ceiling(((double)array.Length) / 64)];
-            oneCounter = new int[(int)Math.Ceiling(((double)array.Length) / 64)];
-            for (int i = 0; i < Math.Ceiling((double)array.Length/64)*64; i++)
-            {
-                int j = i / 64;
-                data[j] <<= 1;
-                if (i < array.Length)
-                {
-                    data[j] += array[i] ? 1 : (ulong)0;
-                }
-            }
+            data = array.data.ToArray();
+            oneCounter = new int[array.data.Count];
             initOneCounter();
-        }
-
+        }       
 
 
         internal void Store(string array)
@@ -154,11 +133,6 @@ namespace k2extensionsLib
                 data[i] = d;
             }
             initOneCounter();
-        }
-
-        internal IEnumerator GetEnumerator()
-        {
-            return data.GetEnumerator();
         }
 
         internal bool this[int key]
@@ -228,6 +202,16 @@ namespace k2extensionsLib
             return result;
         }
 
+        internal string GetAsBitstream()
+        {
+            var res = "";
+            foreach (ulong d in data)
+            {
+                res += Convert.ToString((long)d, 2).PadLeft(64, '0');
+            }
+            return res;
+        }
+
         private char[] ulongToChar(ulong value)
         {
             ulong extractor = (ulong)short.MaxValue;
@@ -270,9 +254,9 @@ namespace k2extensionsLib
 
     public interface IK2Extension
     {
-        IEnumerable<INode> Subjects { get; set; }
-        IEnumerable<INode> Objects { get; set; }
-        IEnumerable<INode> Predicates { get; set; }
+        INode[] Subjects { get; set; }
+        INode[] Objects { get; set; }
+        INode[] Predicates { get; set; }
         void Compress(IGraph graph, bool useK2Triples);
         Triple[] Decomp();
         Triple[] Prec(INode o);
@@ -337,7 +321,7 @@ namespace k2extensionsLib
 
         internal static IEnumerable<Triple> Sort(this IEnumerable<Triple> list)
         {
-            return list.OrderBy(t => t.Subject).ThenBy(t => t.Object).ThenBy(t => t.Predicate);
+            return list.OrderBy(t => t.Subject.ToString()).ThenBy(t => t.Object.ToString()).ThenBy(t => t.Predicate.ToString());
         }
     }
 }

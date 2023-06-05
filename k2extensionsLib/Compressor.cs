@@ -6,6 +6,8 @@ using VDS.RDF;
 using VDS.RDF.Query;
 using VDS.RDF.Query.FullText.Indexing.Lucene;
 using NUnit.Framework;
+using System.Reflection.Emit;
+using System.Security.Cryptography;
 
 namespace k2extensionsLib
 {
@@ -40,7 +42,6 @@ namespace k2extensionsLib
 
         public void Compress(IGraph graph, bool useK2Triples)
         {
-            List<DynamicBitArray> levels = new List<DynamicBitArray>();
             DynamicBitArray labels = new DynamicBitArray();
             this.useK2Triples = useK2Triples;
             Subjects = graph.Triples.Select(x => x.Subject).Distinct().ToArray();
@@ -60,9 +61,26 @@ namespace k2extensionsLib
 
             int size = Math.Max(Subjects.Count(), Objects.Count());
             int N = k;
-            while (N < size) N *= k;
+            int h = 1;
+            while (N < size)
+            {
+                N *= k;
+                h++;
 
-            compressRec(ref levels, ref labels, 0, graph, 0, 0, N, k);
+            }
+
+            List<DynamicBitArray> levels = new List<DynamicBitArray>();
+            List<List<bool>> levelsTest = new List<List<bool>>();
+            for (int i = 0; i < h; i++)
+            {
+                levels.Add(new DynamicBitArray());
+                levelsTest.Add(new List<bool>());
+            }
+
+            //compressRec(ref levels, ref labels, 0, graph, 0, 0, N, k);
+            var root = buildK2Tree(graph, h);
+
+            findPaths(root, ref levels, ref levelsTest, ref labels, 0);
 
             this.labels = new FastRankBitArray(labels);
             DynamicBitArray n = new DynamicBitArray();
@@ -70,7 +88,7 @@ namespace k2extensionsLib
             {
                 n.AddRange(l);
             }
-            startLeaves = n.firstFreeIndex;
+            startLeaves = (n.data.Count - 1)*64 + n.firstFreeIndex;
             n.AddRange(levels.Last());
             t = new FastRankBitArray(n);
         }
@@ -162,6 +180,77 @@ namespace k2extensionsLib
             return result;
         }
 
+        private TreeNode buildK2Tree(IGraph g, int h)
+        {
+            TreeNode root = new TreeNode(k * k);
+
+            var paths = from t in g.Triples
+                        group t by new
+                        {
+                            s = Array.IndexOf(Subjects.ToArray(), t.Subject),
+                            o = Array.IndexOf(Objects.ToArray(), t.Object),
+                        } into subjObjGroup
+                        select (Enumerable.Zip(subjObjGroup.Key.s.ToBase(k, h), subjObjGroup.Key.o.ToBase(k, h)), subjObjGroup.Select(x => x.Predicate));
+
+            foreach ((IEnumerable<(int, int)>, IEnumerable<INode>) path in paths)
+            {
+                TreeNode currentNode = root;
+                TreeNode child = new TreeNode(k * k);
+                foreach ((int, int) level in path.Item1) //Loop through path
+                {
+                    int quadrant = level.Item1 * k + level.Item2;
+                    child = new TreeNode(k * k);
+                    currentNode = currentNode.SetChild(quadrant, child);
+                }
+                ulong label = 0;
+                List<bool> labelTest = new List<bool>();
+                for (int l = 0; l < Predicates.Count(); l++)
+                {
+                    if (path.Item2.Contains(Predicates[l]))
+                    {
+                        labelTest.Add(true);
+                        label += (ulong)1 << (63 - l);
+                    }
+                    else
+                    {
+                        labelTest.Add(false);
+                    }
+                }
+                var s = string.Join("",labelTest.Select(x => x ? "1" : "0")).PadRight(64, '0');
+                Assert.AreEqual(s, Convert.ToString((long)label, 2).PadLeft(64,'0'));
+                currentNode.SetLabel(label);
+            }
+
+            return root;
+        }
+
+        private void findPaths(TreeNode node, ref List<DynamicBitArray> dynT, ref List<List<bool>> dynTTest, ref DynamicBitArray dynLabels, int level)
+        {
+            if (level == dynT.Count)
+            {
+                dynLabels.AddRange(node.GetLabel(), Predicates.Length);
+                return;
+            }
+            uint n = 0;
+            for (int i = 0; i < k * k; i++)
+            {
+                TreeNode child = node.GetChild(i);
+                if (child != null)
+                {
+                    dynTTest[level].Add(true);
+                    n += (uint)1 << (31 - i);
+                    findPaths(child, ref dynT, ref dynTTest, ref dynLabels, level + 1);
+                }
+                else
+                {
+                    dynTTest[level].Add(false);
+                }
+            }
+            dynT[level].AddRange(n, k * k);
+            var s = string.Join("", dynTTest[level].Select(x => x ? "1" : "0"));
+            Assert.AreEqual(s, dynT[level].GetAsString());
+        }
+
         private INode[] getLabelFormLeafPosition(int position)
         {
             int rankInLeaves = t.Rank1(position, startLeaves) - 1;
@@ -204,12 +293,12 @@ namespace k2extensionsLib
             int row = 0;
             while (position > 0)
             {
-                int submatrixPos = position % (int)Math.Pow(k, 2);
+                int submatrixPos = position % (k*k);
                 int submatrixColumn = submatrixPos % k;
                 int submatrixRow = submatrixPos / k;
                 col += submatrixColumn * power;
                 row += submatrixRow * power;
-                int numberOf1Bits = position / (int)Math.Pow(k, 2);
+                int numberOf1Bits = position / (k*k);
                 position = t.Select1(numberOf1Bits);
                 power *= k;
             }
@@ -412,7 +501,6 @@ namespace k2extensionsLib
 
         public void Compress(IGraph graph, bool useK2Triples)
         {
-            List<DynamicBitArray> dynT = new List<DynamicBitArray>();
             this.useK2Triples = useK2Triples;
             Subjects = graph.Triples.Select(x => x.Subject).Distinct().ToArray();
             Objects = graph.Triples.Select(x => x.Object).Distinct().ToArray();
@@ -431,11 +519,24 @@ namespace k2extensionsLib
 
             int size = Math.Max(Math.Max(Subjects.Count(), Objects.Count()), Predicates.Count());
             int N = k;
-            while (N < size) N *= k;
+            int h = 1;
+            while (N < size)
+            {
+                N *= k;
+                h++;
+            }
 
             var dict = graph.Triples.GroupBy(t => (t.Subject, t.Object), e => e.Predicate).ToDictionary(k => k.Key, n => n.ToArray());
 
-            compressRec(ref dynT, 0, ref dict, 0, 0, 0, N);
+            var root = buildK3(graph, h);
+            List<DynamicBitArray> dynT = new List<DynamicBitArray>();
+            List<List<bool>> dynTTest = new List<List<bool>>();
+            for (int i = 0; i < h; i++)
+            {
+                dynT.Add(new DynamicBitArray());
+                dynTTest.Add(new List<bool>());
+            }
+            findPaths(root, ref dynT, ref dynTTest, 0);
 
             DynamicBitArray n = new DynamicBitArray();
             foreach (var l in dynT)
@@ -564,66 +665,53 @@ namespace k2extensionsLib
             Triple[] result = findNodesRec(0, path, new List<(int, int, int)>());
             return result;
         }
-        private bool compressRec(ref List<DynamicBitArray> levels, int level, ref Dictionary<(INode, INode), INode[]> triples, int posSubj, int posPred, int posObj, int N)
+
+        private TreeNode buildK3(IGraph g, int h)
         {
-            while (levels.Count <= level) levels.Add(new DynamicBitArray());
-            uint submatrix = 0;
-            if (posSubj >= Subjects.Length || posPred >= Predicates.Length || posObj >= Objects.Length)
+            TreeNode root = new TreeNode(k * k * k);
+
+            var paths = from t in g.Triples
+                        select Enumerable.Zip(Array.IndexOf(Subjects.ToArray(), t.Subject).ToBase(k, h), Array.IndexOf(Predicates.ToArray(), t.Predicate).ToBase(k, h), Array.IndexOf(Objects.ToArray(), t.Object).ToBase(k, h));
+
+            foreach (IEnumerable<(int, int, int)> path in paths)
             {
-                return false;
-            }
-            else if (N == k)
-            {
-                int index = 0;
-                for (int s = posSubj; s < posSubj + k; s++)
+                TreeNode currentNode = root;
+                foreach ((int, int, int) p in path)
                 {
-                    for (int p = posPred; p < posPred + k; p++)
-                    {
-                        for (int o = posObj; o < posObj + k; o++)
-                        {
-                            if (s < Subjects.Length && p < Predicates.Length && o < Objects.Length)
-                            {
-                                INode[]? conns;
-                                triples.TryGetValue((Subjects[s], Objects[o]), out conns);
-                                //graph.ContainsTriple(new Triple(Subjects[s],Predicates[p], Objects[o]));
-                                if (conns?.Contains(Predicates[p]) ?? false)
-                                {
-                                    submatrix += (uint)1 << (31 - index);
-                                }
-                            }
-                            index++;
-                        }
-                    }
+                    int quadrant = p.Item1 * k * k + p.Item2 * k + p.Item3;
+                    TreeNode child = new TreeNode(k * k * k);
+                    currentNode = currentNode.SetChild(quadrant, child);
+                }
+
+            }
+
+            return root;
+        }
+
+        private void findPaths(TreeNode node, ref List<DynamicBitArray> dynT, ref List<List<bool>> dynTTest, int level)
+        {
+            if (level == dynT.Count)
+            {
+                return;
+            }
+            uint n = 0;
+            for (int i = 0; i < k * k * k; i++)
+            {
+                TreeNode child = node.GetChild(i);
+                if (child != null)
+                {
+                    dynTTest[level].Add(true);
+                    n += (uint)1 << (31 - i);
+                    findPaths(child, ref dynT, ref dynTTest, level + 1);
+                }
+                else
+                {
+                    dynTTest[level].Add(false);
                 }
             }
-            else
-            {
-                int NextN = N / k;
-                int index = 0;
-                for (int s = 0; s < k; s++)
-                {
-                    for (int p = 0; p < k; p++)
-                    {
-                        for (int o = 0; o < k; o++)
-                        {
-                            if (compressRec(ref levels, level + 1, ref triples, posSubj + s * NextN, posPred + p * NextN, posObj + o * NextN, NextN))
-                            {
-                                submatrix += (uint)1 << (31 - index);
-                            }
-                            index++;
-                        }
-                    }
-                }
-            }
-            if (submatrix != 0)
-            {
-                levels[level].AddRange(submatrix, k * k * k);
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+            dynT[level].AddRange(n, k * k * k);
+            var s = string.Join("", dynTTest[level].Select(x => x ? "1" : "0"));
+            Assert.AreEqual(s, dynT[level].GetAsString());
         }
 
         private Triple[] findNodesRec(int positionInNodes, List<(int?, int?, int?)> searchPath, List<(int, int, int)> parentPath)
@@ -672,14 +760,16 @@ namespace k2extensionsLib
                 return Math.Max(Subjects.Count(), Objects.Count());
             }
         }
-        Dictionary<INode, FastRankBitArray> t { get; set; }
+        Dictionary<INode, FlatPopcount> t { get; set; }
+        Dictionary<INode, FastRankBitArray> t_Test { get; set; }
         bool useK2Triples { get; set; }
         int k { get; set; }
 
         public MK2(int k)
         {
             this.k = k;
-            t = new Dictionary<INode, FastRankBitArray>();
+            t = new Dictionary<INode, FlatPopcount>();
+            t_Test = new Dictionary<INode, FastRankBitArray>();
             Subjects = new INode[0];
             Predicates = new INode[0];
             Objects = new INode[0];
@@ -716,7 +806,6 @@ namespace k2extensionsLib
 
             foreach (var pred in Predicates)
             {
-                var res = BuildK2Tree(graph, pred, h);
                 List<DynamicBitArray> dynTForPred = new List<DynamicBitArray>();
                 List<List<bool>> dynTForPredTest = new List<List<bool>>();
                 for (int i = 0; i < h; i++)
@@ -724,11 +813,14 @@ namespace k2extensionsLib
                     dynTForPred.Add(new DynamicBitArray());
                     dynTForPredTest.Add(new List<bool>());
                 }
-                FindPaths(res, ref dynTForPred, ref dynTForPredTest, 0);
+
+                var root = buildK2Tree(graph, pred, h);
+                findPaths(root, ref dynTForPred, ref dynTForPredTest, 0);
+
                 for (int i = 0; i < h; i++)
                 {
-                    var s = string.Join("",dynTForPredTest[i].Select(x => x ? "1" : "0"));
-                    Assert.AreEqual(s,dynTForPred[i].GetAsString());
+                    var s = string.Join("", dynTForPredTest[i].Select(x => x ? "1" : "0"));
+                    Assert.AreEqual(s, dynTForPred[i].GetAsString());
                 }
                 DynamicBitArray flatT = new DynamicBitArray();
                 List<bool> flatTTest = new List<bool>();
@@ -740,17 +832,19 @@ namespace k2extensionsLib
                     Assert.AreEqual(l, flatT.GetAsString());
                 }
 
-                var f = string.Join("",dynTForPredTest.SelectMany(x=> x.Select(y => y ? "1" : "0")));
+                var f = string.Join("", dynTForPredTest.SelectMany(x => x.Select(y => y ? "1" : "0")));
 
-                var frba = new FastRankBitArray(flatT);
+                var frba = new FlatPopcount(flatT);
+                var frba_test = new FastRankBitArray(flatT);
 
                 Assert.AreEqual(f.TrimEnd('0'), frba.GetAsBitstream().TrimEnd('0'));
                 t.Add(pred, frba);
+                t_Test.Add(pred, frba_test);
             }
         }
-        public TreeNode BuildK2Tree(IGraph g, INode pred, int h)
+        private TreeNode buildK2Tree(IGraph g, INode pred, int h)
         {
-            TreeNode root = new TreeNode();
+            TreeNode root = new TreeNode(k * k);
 
             var paths = from t in g.GetTriplesWithPredicate(pred)
                         select Enumerable.Zip(Array.IndexOf(Subjects.ToArray(), t.Subject).ToBase(k, h), Array.IndexOf(Objects.ToArray(), t.Object).ToBase(k, h));
@@ -761,7 +855,7 @@ namespace k2extensionsLib
                 foreach ((int, int) p in path)
                 {
                     int quadrant = p.Item1 * k + p.Item2;
-                    TreeNode child = new TreeNode();
+                    TreeNode child = new TreeNode(k * k);
                     currentNode = currentNode.SetChild(quadrant, child);
                 }
 
@@ -770,7 +864,7 @@ namespace k2extensionsLib
             return root;
         }
 
-        private void FindPaths(TreeNode node, ref List<DynamicBitArray> dynT, ref List<List<bool>> dynTTest, int level)
+        private void findPaths(TreeNode node, ref List<DynamicBitArray> dynT, ref List<List<bool>> dynTTest, int level)
         {
             if (level == dynT.Count)
             {
@@ -784,7 +878,7 @@ namespace k2extensionsLib
                 {
                     dynTTest[level].Add(true);
                     n += (uint)1 << (31 - i);
-                    FindPaths(child, ref dynT, ref dynTTest, level + 1);
+                    findPaths(child, ref dynT, ref dynTTest, level + 1);
                 }
                 else
                 {
@@ -888,10 +982,10 @@ namespace k2extensionsLib
             {
                 string line = sr.ReadLine() ?? "";
                 NodeFactory nf = new NodeFactory(new NodeFactoryOptions());
-                List<FastRankBitArray> l = new List<FastRankBitArray>();
+                List<FlatPopcount> l = new List<FlatPopcount>();
                 while (line != "Tree stop")
                 {
-                    l.Add(new FastRankBitArray());
+                    l.Add(new FlatPopcount());
                     l[^1].Store(line);
                     line = sr.ReadLine() ?? "";
                 }
@@ -955,6 +1049,7 @@ namespace k2extensionsLib
                     int relativePosition = s * k + o;
                     int pos = positionInNodes + relativePosition;
                     List<(int, int)> parent = parentPath.Append((s, o)).ToList();
+                    Assert.AreEqual(t_Test[predicate][pos], t[predicate][pos]);
                     if (searchPath.Count() == 0 && t[predicate][pos])
                     {
                         int posS = parent.Select(x => x.Item1).FromBase(k);
@@ -963,6 +1058,14 @@ namespace k2extensionsLib
                     }
                     else if (t[predicate][pos])
                     {
+                        var x = t[predicate].Rank1(pos);
+                        var y = t_Test[predicate].Rank1(pos);
+                        if(x != y)
+                        {
+
+                        }
+                        //Assert.AreEqual(y,x );
+
                         pos = t[predicate].Rank1(pos) * k * k;
 
                         result.AddRange(findNodesRec(predicate, pos, searchPath, parent));

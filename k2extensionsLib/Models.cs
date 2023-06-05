@@ -349,7 +349,14 @@ namespace k2extensionsLib
         {
             int result = 0;
             Int128 blockIndex = _L1L2Index[l1];
+            ulong part1 = (ulong)(blockIndex >>> 64);
+            ulong part2 = (ulong)(blockIndex << 64 >>> 64);
+            string s = Convert.ToString((long)part1, 2) + Convert.ToString((long)part2, 2);
+            int result_test = (int)Convert.ToInt64(s.Substring(0, 44),2);
             result += (int)(blockIndex >>> 84);
+
+            Assert.AreEqual(result_test, result);
+
             blockIndex <<= 44;
             while (l2 > 0)
             {

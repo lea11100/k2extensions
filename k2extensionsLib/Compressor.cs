@@ -13,12 +13,12 @@ namespace k2extensionsLib
 {
     public class K2ArrayIndex : IK2Extension
     {
-        FastRankBitArray t { get; set; }
-        FastRankBitArray labels { get; set; }
-        int startLeaves { get; set; }
-        int k { get; set; }
-        private bool useK2Triples { get; set; }
-        int size
+        FlatPopcount _T { get; set; }
+        FlatPopcount _Labels { get; set; }
+        int _StartLeaves { get; set; }
+        int _K { get; set; }
+        private bool _UseK2Triples { get; set; }
+        int _Size
         {
             get
             {
@@ -31,10 +31,10 @@ namespace k2extensionsLib
 
         public K2ArrayIndex(int k)
         {
-            this.k = k;
-            useK2Triples = false;
-            t = new FastRankBitArray();
-            labels = new FastRankBitArray();
+            _K = k;
+            _UseK2Triples = false;
+            _T = new FlatPopcount();
+            _Labels = new FlatPopcount();
             Subjects = new INode[0];
             Predicates = new INode[0];
             Objects = new INode[0];
@@ -43,7 +43,7 @@ namespace k2extensionsLib
         public void Compress(IGraph graph, bool useK2Triples)
         {
             DynamicBitArray labels = new DynamicBitArray();
-            this.useK2Triples = useK2Triples;
+            this._UseK2Triples = useK2Triples;
             Subjects = graph.Triples.Select(x => x.Subject).Distinct().ToArray();
             Objects = graph.Triples.Select(x => x.Object).Distinct().ToArray();
             if (useK2Triples)
@@ -60,11 +60,11 @@ namespace k2extensionsLib
             Predicates = graph.Triples.Select(x => x.Predicate).Distinct().ToArray();
 
             int size = Math.Max(Subjects.Count(), Objects.Count());
-            int N = k;
+            int N = _K;
             int h = 1;
             while (N < size)
             {
-                N *= k;
+                N *= _K;
                 h++;
 
             }
@@ -82,35 +82,37 @@ namespace k2extensionsLib
 
             findPaths(root, ref levels, ref levelsTest, ref labels, 0);
 
-            this.labels = new FastRankBitArray(labels);
+            _Labels = new FlatPopcount(labels);
+            Assert.AreEqual(graph.Triples.Count, labels.GetAsString().Count(x => x == '1'));
             DynamicBitArray n = new DynamicBitArray();
             foreach (var l in levels.Take(levels.Count() - 1))
             {
                 n.AddRange(l);
             }
-            startLeaves = (n.data.Count - 1)*64 + n.firstFreeIndex;
+            _StartLeaves = (n.data.Count - 1)*64 + n.firstFreeIndex;
             n.AddRange(levels.Last());
-            t = new FastRankBitArray(n);
+            _T = new FlatPopcount(n);
         }
 
         public Triple[] AllEdgesOfType(INode p)
         {
             List<Triple> result = new List<Triple>();
-            int positionInTypes = Array.IndexOf(Predicates.ToArray(), p);
+            int positionInTypes = Array.IndexOf(Predicates, p);
             List<int> nodesWithType = new List<int>();
             int counter = positionInTypes;
             int index = 0;
-            while (counter < labels.Length())
+            while (counter < _Labels.Length())
             {
-                if (labels[counter]) nodesWithType.Add(index);
+                if (_Labels[counter]) nodesWithType.Add(index);
                 counter += Predicates.Count();
                 index++;
             }
             foreach (var n in nodesWithType)
             {
-                int positionInNodes = t.Select1(t.Rank1(startLeaves) + n + 1);
+                //long positionInNodes = _StartLeaves + n * Predicates.Count();
+                long positionInNodes = _T.Select1(_T.Rank1(_StartLeaves) + n + 1);
                 Tuple<int, int> cell = getCell(positionInNodes);
-                var r = new Triple(Subjects.ElementAt(cell.Item1), Predicates.ElementAt(positionInTypes), Objects.ElementAt(cell.Item2));
+                var r = new Triple(Subjects.ElementAt(cell.Item1), Predicates[positionInTypes], Objects.ElementAt(cell.Item2));
                 result.Add(r);
             }
             return result.ToArray();
@@ -118,8 +120,8 @@ namespace k2extensionsLib
 
         public Triple[] Connections(INode s, INode o)
         {
-            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
-                                       from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
+                                       from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
                                        where subj.i == obj.i
                                        select ((int?)subj.v, (int?)obj.v)).ToList();
 
@@ -129,7 +131,7 @@ namespace k2extensionsLib
 
         public Triple[] Decomp()
         {
-            (int?, int?)[] path = new (int?, int?)[size.ToBase(k).Length];
+            (int?, int?)[] path = new (int?, int?)[_Size.ToBase(_K).Length];
             Array.Fill(path, (null, null));
             Triple[] result = findNodesRec(0, path.ToList(), null, new List<(int, int)>());
             return result;
@@ -137,8 +139,8 @@ namespace k2extensionsLib
 
         public bool Exists(INode s, INode p, INode o)
         {
-            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
-                                       from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
+                                       from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
                                        where subj.i == obj.i
                                        select ((int?)subj.v, (int?)obj.v)).ToList();
 
@@ -148,7 +150,7 @@ namespace k2extensionsLib
 
         public Triple[] Prec(INode o)
         {
-            List<(int?, int?)> path = (from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+            List<(int?, int?)> path = (from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
                                        select ((int?)null, (int?)obj.v)).ToList();
             Triple[] result = findNodesRec(0, path, null, new List<(int, int)>());
             return result;
@@ -156,7 +158,7 @@ namespace k2extensionsLib
 
         public Triple[] PrecOfType(INode o, INode p)
         {
-            List<(int?, int?)> path = (from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+            List<(int?, int?)> path = (from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
                                        select ((int?)null, (int?)obj.v)).ToList();
             Triple[] result = findNodesRec(0, path, p, new List<(int, int)>());
             return result;
@@ -164,7 +166,7 @@ namespace k2extensionsLib
 
         public Triple[] Succ(INode s)
         {
-            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
                                        select ((int?)subj.v, (int?)null)).ToList();
 
             Triple[] result = findNodesRec(0, path, null, new List<(int, int)>());
@@ -173,7 +175,7 @@ namespace k2extensionsLib
 
         public Triple[] SuccOfType(INode s, INode p)
         {
-            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(k, size.ToBase(k).Length).Select((v, i) => (v, i))
+            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
                                        select ((int?)subj.v, (int?)null)).ToList();
 
             Triple[] result = findNodesRec(0, path, p, new List<(int, int)>());
@@ -182,7 +184,7 @@ namespace k2extensionsLib
 
         private TreeNode buildK2Tree(IGraph g, int h)
         {
-            TreeNode root = new TreeNode(k * k);
+            TreeNode root = new TreeNode(_K * _K);
 
             var paths = from t in g.Triples
                         group t by new
@@ -190,16 +192,16 @@ namespace k2extensionsLib
                             s = Array.IndexOf(Subjects.ToArray(), t.Subject),
                             o = Array.IndexOf(Objects.ToArray(), t.Object),
                         } into subjObjGroup
-                        select (Enumerable.Zip(subjObjGroup.Key.s.ToBase(k, h), subjObjGroup.Key.o.ToBase(k, h)), subjObjGroup.Select(x => x.Predicate));
+                        select (Enumerable.Zip(subjObjGroup.Key.s.ToBase(_K, h), subjObjGroup.Key.o.ToBase(_K, h)), subjObjGroup.Select(x => x.Predicate));
 
             foreach ((IEnumerable<(int, int)>, IEnumerable<INode>) path in paths)
             {
                 TreeNode currentNode = root;
-                TreeNode child = new TreeNode(k * k);
+                TreeNode child = new TreeNode(_K * _K);
                 foreach ((int, int) level in path.Item1) //Loop through path
                 {
-                    int quadrant = level.Item1 * k + level.Item2;
-                    child = new TreeNode(k * k);
+                    int quadrant = level.Item1 * _K + level.Item2;
+                    child = new TreeNode(_K * _K);
                     currentNode = currentNode.SetChild(quadrant, child);
                 }
                 ulong label = 0;
@@ -232,7 +234,7 @@ namespace k2extensionsLib
                 return;
             }
             uint n = 0;
-            for (int i = 0; i < k * k; i++)
+            for (int i = 0; i < _K * _K; i++)
             {
                 TreeNode child = node.GetChild(i);
                 if (child != null)
@@ -246,15 +248,15 @@ namespace k2extensionsLib
                     dynTTest[level].Add(false);
                 }
             }
-            dynT[level].AddRange(n, k * k);
+            dynT[level].AddRange(n, _K * _K);
             var s = string.Join("", dynTTest[level].Select(x => x ? "1" : "0"));
             Assert.AreEqual(s, dynT[level].GetAsString());
         }
 
         private INode[] getLabelFormLeafPosition(int position)
         {
-            int rankInLeaves = t.Rank1(position, startLeaves) - 1;
-            ulong[] l = labels[(Predicates.Count() * rankInLeaves)..(Predicates.Count() * rankInLeaves + Predicates.Count())];
+            int rankInLeaves = _T.Rank1(position, _StartLeaves) - 1;
+            ulong[] l = _Labels[(Predicates.Count() * rankInLeaves)..(Predicates.Count() * rankInLeaves + Predicates.Count())];
             var result = getPredicatesFromBitStream(l);
             return result.ToArray();
         }
@@ -286,85 +288,23 @@ namespace k2extensionsLib
         /// </summary>
         /// <param name="position"></param>
         /// <returns></returns>
-        private Tuple<int, int> getCell(int position)
+        private Tuple<int, int> getCell(long position)
         {
             int power = 1;
             int col = 0;
             int row = 0;
             while (position > 0)
             {
-                int submatrixPos = position % (k*k);
-                int submatrixColumn = submatrixPos % k;
-                int submatrixRow = submatrixPos / k;
+                int submatrixPos = (int)position % (_K*_K);
+                int submatrixColumn = submatrixPos % _K;
+                int submatrixRow = submatrixPos / _K;
                 col += submatrixColumn * power;
                 row += submatrixRow * power;
-                int numberOf1Bits = position / (k*k);
-                position = t.Select1(numberOf1Bits);
-                power *= k;
+                int numberOf1Bits = (int)position / (_K*_K);
+                position = _T.Select1(numberOf1Bits);
+                power *= _K;
             }
             return new Tuple<int, int>(row, col);
-        }
-
-        private bool compressRec(ref List<DynamicBitArray> levels, ref DynamicBitArray labels, int level, IGraph graph, int row, int col, int N, int k)
-        {
-            while (levels.Count() <= level) levels.Add(new DynamicBitArray());
-            uint submatrix = 0;
-            if (N == k)
-            {
-                int index = 0;
-                DynamicBitArray additionalLabels = new DynamicBitArray();
-                for (int i = 0; i < k; i++)
-                {
-                    for (int j = 0; j < k; j++)
-                    {
-                        INode[] triples = new INode[0];
-                        if (row + i < Subjects.Count() && col + j < Objects.Count())
-                            triples = graph.GetTriplesWithSubjectObject(Subjects[row + i], Objects[col + j]).Select(x => x.Predicate).ToArray();
-
-                        ulong label = 0;
-                        bool containsLabel = false;
-                        for (int l = 0; l < Predicates.Count(); l++)
-                        {
-                            if (triples.Contains(Predicates[l]))
-                            {
-                                label += (ulong)1 << (63 - l);
-                                containsLabel = true;
-                            }
-                        }
-
-                        if (containsLabel)
-                        {
-                            submatrix += (uint)1 << (31 - index);
-                            additionalLabels.AddRange(label, Predicates.Count());
-                        }
-                        index++;
-                    }
-                }
-                labels.AddRange(additionalLabels);
-            }
-            else
-            {
-                int NextN = N / k;
-                int index = 0;
-                for (int i = 0; i < k; i++)
-                {
-                    for (int j = 0; j < k; j++)
-                    {
-                        if (compressRec(ref levels, ref labels, level + 1, graph, row + i * NextN, col + j * NextN, NextN, k))
-                            submatrix += (uint)1 << (31 - index);
-                        index++;
-                    }
-                }
-            }
-            if (submatrix != 0)
-            {
-                levels[level].AddRange(submatrix, k * k);
-                return true;
-            }
-            else
-            {
-                return false;
-            }
         }
 
         private Triple[] findNodesRec(int positionInNodes, List<(int?, int?)> searchPath, INode? predicate, List<(int, int)> parentPath)
@@ -372,25 +312,25 @@ namespace k2extensionsLib
             List<Triple> result = new List<Triple>();
             (int?, int?) position = searchPath[0];
             searchPath = searchPath.Skip(1).ToList();
-            for (int s = position.Item1 ?? 0; s < (position.Item1 + 1 ?? k); s++)
+            for (int s = position.Item1 ?? 0; s < (position.Item1 + 1 ?? _K); s++)
             {
-                for (int o = position.Item2 ?? 0; o < (position.Item2 + 1 ?? k); o++)
+                for (int o = position.Item2 ?? 0; o < (position.Item2 + 1 ?? _K); o++)
                 {
-                    int relativePosition = s * k + o;
+                    int relativePosition = s * _K + o;
                     int pos = positionInNodes + relativePosition;
                     List<(int, int)> parent = parentPath.Append((s, o)).ToList();
-                    if (searchPath.Count() == 0 && t[pos])
+                    if (searchPath.Count() == 0 && _T[pos])
                     {
                         //pos = t.Rank1(pos) * k * k;
-                        int posS = parent.Select(x => x.Item1).FromBase(k);
-                        int posO = parent.Select(x => x.Item2).FromBase(k);
+                        int posS = parent.Select(x => x.Item1).FromBase(_K);
+                        int posO = parent.Select(x => x.Item2).FromBase(_K);
                         INode[] preds = getLabelFormLeafPosition(pos);
                         if (predicate != null) preds = preds.Where(x => x.Equals(predicate)).ToArray();
                         if (preds.Length != 0) result.AddRange(preds.Select(x => new Triple(Subjects.ElementAt(posS), x, Objects.ElementAt(posO))));
                     }
-                    else if (t[pos])
+                    else if (_T[pos])
                     {
-                        pos = t.Rank1(pos) * k * k;
+                        pos = _T.Rank1(pos) * _K * _K;
                         result.AddRange(findNodesRec(pos, searchPath, predicate, parent));
                     }
                 }
@@ -413,11 +353,11 @@ namespace k2extensionsLib
             //}
             using (var sw = File.CreateText(filename))
             {
-                sw.WriteLine(startLeaves);
-                sw.WriteLine(t.GetDataAsString());
-                sw.WriteLine(labels.GetDataAsString());
+                sw.WriteLine(_StartLeaves);
+                sw.WriteLine(_T.GetDataAsString());
+                sw.WriteLine(_Labels.GetDataAsString());
                 sw.WriteLine(string.Join(" ", Predicates.ToList()));
-                if (useK2Triples)
+                if (_UseK2Triples)
                 {
                     var so = Subjects.Intersect(Objects);
                     sw.WriteLine(string.Join(" ", so));
@@ -437,11 +377,11 @@ namespace k2extensionsLib
             {
                 string line = sr.ReadLine() ?? "";
                 NodeFactory nf = new NodeFactory(new NodeFactoryOptions());
-                startLeaves = int.Parse(line);
+                _StartLeaves = int.Parse(line);
                 line = sr.ReadLine() ?? "";
-                t.Store(line);
+                _T.Store(line);
                 line = sr.ReadLine() ?? "";
-                labels.Store(line);
+                _Labels.Store(line);
                 line = sr.ReadLine() ?? "";
                 Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x)).ToArray();
                 if (useK2Triple)
@@ -469,7 +409,7 @@ namespace k2extensionsLib
         public INode[] Objects { get; set; }
         public INode[] Predicates { get; set; }
 
-        FastRankBitArray t { get; set; }
+        FlatPopcount t { get; set; }
         bool useK2Triples { get; set; }
         int k;
         int size
@@ -484,7 +424,7 @@ namespace k2extensionsLib
         public K3(int k)
         {
             this.k = k;
-            t = new FastRankBitArray();
+            t = new FlatPopcount();
             Subjects = new INode[0];
             Predicates = new INode[0];
             Objects = new INode[0];
@@ -543,7 +483,7 @@ namespace k2extensionsLib
             {
                 n.AddRange(l);
             }
-            t = new FastRankBitArray(n);
+            t = new FlatPopcount(n);
         }
 
         public Triple[] Connections(INode s, INode o)
@@ -1060,11 +1000,11 @@ namespace k2extensionsLib
                     {
                         var x = t[predicate].Rank1(pos);
                         var y = t_Test[predicate].Rank1(pos);
-                        if(x != y)
+                        if(x!= y)
                         {
 
                         }
-                        //Assert.AreEqual(y,x );
+                        Assert.AreEqual(y,x );
 
                         pos = t[predicate].Rank1(pos) * k * k;
 

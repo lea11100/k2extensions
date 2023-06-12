@@ -114,21 +114,21 @@ namespace k2extensionsLib
     {
         //L0-index missing, since optional
 
-        private Int128[] _L1L2Index { get; set; } //TODO: Maybe use two ulongs instead
+        private UInt128[] _L1L2Index { get; set; } //TODO: Maybe use two ulongs instead
         private ulong[] _Data { get; set; }
         private long[] _SampelsOfOnePositions { get; set; }
 
         public FlatPopcount()
         {
             _Data = new ulong[0];
-            _L1L2Index = new Int128[0];
+            _L1L2Index = new UInt128[0];
             _SampelsOfOnePositions = new long[0];
         }
 
         public FlatPopcount(DynamicBitArray array)
         {
             _Data = array.data.ToArray();
-            _L1L2Index = new Int128[(int)Math.Ceiling((double)_Data.Length/64)];
+            _L1L2Index = new UInt128[(int)Math.Ceiling((double)_Data.Length/64)];
             _SampelsOfOnePositions = new long[0];
             Init();
         }
@@ -149,10 +149,15 @@ namespace k2extensionsLib
             return res;
         }
 
+        internal int Length()
+        {
+            return _Data.Length * 64;
+        }
+
         internal void Store(string array)
         {
             _Data = new ulong[(int)Math.Ceiling(((double)array.Length) / 4)];
-            _L1L2Index = new Int128[(int)Math.Ceiling((double)_Data.Length / 64)];
+            _L1L2Index = new UInt128[(int)Math.Ceiling((double)_Data.Length / 64)];
             var chunkedArray = array.Chunk(4);
             for (int i = 0; i < chunkedArray.Count(); i++)
             {
@@ -172,7 +177,7 @@ namespace k2extensionsLib
         private void Init()
         {
             long numberOfOnesBeforeL1 = 0;
-            List<long> sampels = new List<long>();
+            List<long> sampels = new List<long>() { 0 };
             int index = 0;
             foreach (var l1 in _Data.Chunk(64))
             {
@@ -192,7 +197,7 @@ namespace k2extensionsLib
                     numberOfOnesBeforeL2 += temp;
                     indexForL2++;
                 }
-                _L1L2Index[index] = _InitL1L2(numberOfOnesBeforeL1, numberOfOnesBeforeEachL2.Skip(0).ToArray(), out int blockPositionOf8192);
+                _L1L2Index[index] = _InitL1L2(numberOfOnesBeforeL1, numberOfOnesBeforeEachL2.Skip(1).ToArray());
                 numberOfOnesBeforeL1 += numberOfOnesBeforeL2;
                 index++;
             }
@@ -217,27 +222,20 @@ namespace k2extensionsLib
                         return index - 64 + i;
                     }
                     mask >>= 1;
+                    mask += ulong.MaxValue << 63;
                 } 
             }
-            return -1;
+            throw new Exception();
         }
         
-        private Int128 _InitL1L2(long onesBeforeL1, int[] onesInL2, out int blockPositionOf8192)
+        private UInt128 _InitL1L2(long onesBeforeL1, int[] onesInL2)
         {
-            blockPositionOf8192 = -1;
-            Int128 result = 0;
-            result += (Int128)onesBeforeL1 << 84; //Get size of 44 Bit and shift to front;
-            var oneCounter = 0;
-            var index = 44;
-            foreach (var l2 in onesInL2)
+            UInt128 result = 0;
+            result += (UInt128)onesBeforeL1 << 84; //Get size of 44 Bit and shift to front;
+            var index = 0;
+            foreach (var l2 in onesInL2.Reverse())
             {
-                int temp = oneCounter += l2;
-                if(oneCounter >>> 13 != temp >>> 13)
-                {
-                    blockPositionOf8192 = (index - 44) / 12;
-                }
-                oneCounter += l2;
-                result += (Int128)l2 << (116 - index); //Get size of 12 and shift to position
+                result += (UInt128)l2 << index; //Get size of 12 and shift to position
                 index += 12;
             }
             return result;
@@ -288,37 +286,71 @@ namespace k2extensionsLib
 
         internal long Select1(int nthOne)
         {
+            //long position = _SampelsOfOnePositions[nthOne >> 13];
+            //int l1 = (int)(position >> 12);
+            //position = l1 * 4096;
+            //int remainingOnes = nthOne - getL1(l1);
+
+            //while (remainingOnes - getL1(l1) > 0)
+            //{
+            //    remainingOnes -= getL1(l1);
+            //    l1++;
+            //    position += 4096;
+            //}
+            //int l2 = 0;
+            //while (remainingOnes - getL2(l1, l2) > 0)
+            //{
+            //    l2++;
+            //    remainingOnes -= getL2(l1, l2);
+            //    position += 512;
+            //}
+            //position += Select1In512(_Data[(l1 * 64 + l2 * 8)..(l1 * 64 + l2 * 8 + 8)], remainingOnes);
+            //return position;
+
             long position = _SampelsOfOnePositions[nthOne >> 13];
             int l1 = (int)(position >> 12);
             position = l1 * 4096;
-            int remainingOnes = nthOne - getL1(l1);
-
-            while (remainingOnes - getL1(l1) > 0)
+            int remainingOnes = nthOne;
+            //string s = GetAsBitstream();
+            while ((l1+1)<_L1L2Index.Count() && getL1(l1 + 1) < nthOne)
             {
-                remainingOnes -= getL1(l1);
                 l1++;
-                position += 4096;
+                position += 1L << 12;
             }
+            //Assert.AreEqual(s.Substring(0, l1 * 4096).Where(x => x == '1').Count(), getL1(l1));
+            remainingOnes -= getL1(l1);
             int l2 = 0;
-            while (remainingOnes - getL2(l1, l2) > 0)
+            while (l2 <= 6 && getL2(l1,l2) < remainingOnes)
             {
                 l2++;
-                remainingOnes -= getL2(l1, l2);
-                position += 512;
+                position += 1L << 9;
             }
+            //Assert.AreEqual(s.Substring(0, l1 * 4096 + l2 * 512).Where(x => x == '1').Count(), getL1(l1) + (l2>0?getL2(l1,l2-1):0));
+            if (l2>0) remainingOnes -= getL2(l1, l2-1);
             position += Select1In512(_Data[(l1 * 64 + l2 * 8)..(l1 * 64 + l2 * 8 + 8)], remainingOnes);
+
+            remainingOnes = nthOne;
+            //int positionTest = s.TakeWhile(c => (remainingOnes -= c == '1' ? 1 : 0) > 0).Count();
+            //Assert.AreEqual(positionTest, position);
             return position;
+
         }
 
         private int getL1(int position)
         {
-            return (int)(_L1L2Index[position] >> 96);
+            return (int)(_L1L2Index[position] >>> 84);
         }
 
         private int getL2(int positionL1, int positionL2)
         {
-            Int128 mask = Int128.MaxValue >>> 44 >>> (positionL2 * 12);
-            return (int)(_L1L2Index[positionL1] & mask >>> ((7 - positionL2) * 12));
+            string s = _L1L2Index[positionL1].ToBinaryString();
+            int test = Convert.ToInt32(s.Substring(44 + positionL2 * 12, 12), 2);
+
+            UInt128 mask = UInt128.MaxValue >>> 44 >>> (positionL2 * 12);
+            int result = (int)((_L1L2Index[positionL1] & mask) >>> ((6 - positionL2) * 12));
+
+            Assert.AreEqual(test, result);
+            return result;
         }
 
         /// <summary>
@@ -348,27 +380,32 @@ namespace k2extensionsLib
         private int getRankByBlocks(int l1, int l2, int l3, int relativePositionInL3)
         {
             int result = 0;
-            Int128 blockIndex = _L1L2Index[l1];
-            ulong part1 = (ulong)(blockIndex >>> 64);
-            ulong part2 = (ulong)(blockIndex << 64 >>> 64);
-            string s = Convert.ToString((long)part1, 2) + Convert.ToString((long)part2, 2);
+            UInt128 blockIndex = _L1L2Index[l1];
+            string s = blockIndex.ToBinaryString();
             int result_test = (int)Convert.ToInt64(s.Substring(0, 44),2);
             result += (int)(blockIndex >>> 84);
 
             Assert.AreEqual(result_test, result);
 
             blockIndex <<= 44;
-            while (l2 > 0)
+            int l2_temp = l2;
+            if (l2_temp != 0)
             {
-                blockIndex <<= 12;
-                l2--;
+                while (l2_temp > 1)
+                {
+                    blockIndex <<= 12;
+                    l2_temp--;
+                }
+                result_test += Convert.ToInt32(s.Substring(44 + (l2-1) * 12, 12), 2);
+                result += (int)(blockIndex >>> 116);
             }
-            result += (int)(blockIndex >>> 116);
+            Assert.AreEqual(result_test, result);
 
             ulong[] block512 = _Data[(l1 * 64 + l2 * 8)..(l1 * 64 + l2 * 8 + l3)];
             result += block512.Select(BitOperations.PopCount).Sum();
 
             ulong blockInBlock512 = _Data[l1 * 64 + l2 * 8 + l3];
+
             result += BitOperations.PopCount(blockInBlock512 & (ulong.MaxValue << (63 - relativePositionInL3)));
 
             return result;
@@ -559,6 +596,14 @@ namespace k2extensionsLib
 
     internal static class GeneralExtensions
     {
+        internal static string ToBinaryString(this UInt128 number)
+        {
+            ulong part1 = (ulong)(number >>> 64);
+            ulong part2 = (ulong)(number << 64 >>> 64);
+            string s = Convert.ToString((long)part1, 2).PadLeft(64, '0') + Convert.ToString((long)part2, 2).PadLeft(64, '0');
+            return s;
+        }
+
         internal static char[] ToChars(this ulong value)
         {
             ulong extractor = (ulong)short.MaxValue;

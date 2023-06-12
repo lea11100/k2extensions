@@ -18,19 +18,19 @@ namespace k2extensionsLib
 {
     public class Tester
     {
-        public string TestExtensions(List<IK2Extension> extensionsUnderTest, string fileName, bool useK2Triples)
+        public static string TestExtensions(List<IK2Extension> extensionsUnderTest, string fileName, bool useK2Triples)
         {
             IGraph g = new Graph();
             g.LoadFromFile(fileName);
 
-            List<Triple> testValues = new List<Triple>();
-            Random r = new Random();
+            var testValues = new List<Triple>();
+            var r = new Random();
             var s = g.Triples.Select(x => x.Subject).Distinct();
             var o = g.Triples.Select(x => x.Object).Distinct();
             var p = g.Triples.Select(x => x.Predicate).Distinct();
             for (int i = 0; i < 20; i++)
             {
-                testValues.Add(g.Triples.ElementAt(r.Next(g.Triples.Count())));
+                testValues.Add(g.Triples.ElementAt(r.Next(g.Triples.Count)));
             }
             for (int i = 0; i < 80; i++)
             {
@@ -45,11 +45,11 @@ namespace k2extensionsLib
             var testResExists = correctValues.Item1;
             var testRes = correctValues.Item2;
             var uncompressedSize = new FileInfo(fileName).Length;
-            string result = "Name;Compression;SPO;SP?O;SP?O?;S?P?O;S?PO?;S?PO;SPO?;S?P?O?;Compression ratio\r\n";
-            List<List<double>> timeResults = new List<List<double>>();
+            string result = "Name;Compression;SPO;SP?O;SP?O?;S?P?O;S?PO?;S?PO;SPO?;S?P?O?;Compression size\r\n";
+            var timeResults = new List<List<int>>();
             for (int i = 0; i < 7; i++)
             {
-                timeResults.Add(new List<double>());
+                timeResults.Add(new List<int>());
             }
             foreach (var ext in extensionsUnderTest)
             {
@@ -76,21 +76,64 @@ namespace k2extensionsLib
                     Assert.AreEqual(testRes[i][4], res.Sort());
                     timeResults[6].Add(GetExecutionTime(ref res, () => ext.SuccOfType(t.Subject, t.Predicate)));
                     Assert.AreEqual(testRes[i][5], res.Sort());
-                    Console.Write($"\r{i}/{testValues.Count} finished");
+                    Console.Write($"\r{i+1}/{testValues.Count} finished");
                 }
-                Console.WriteLine($"Queries finished");
-                timeResults.ForEach(x => result += x.Average() + " ms;");
+                Console.WriteLine($"\r\nQueries finished");
+                timeResults.ForEach(x => result += string.Format("{0:0.000}", Math.Round(x.Average(), 3)) + " ms;");
                 result += GetExecutionTime(ref res, ext.Decomp) + " ms;";
                 Console.WriteLine($"Decompression finished");
                 Assert.AreEqual(res.Sort(), g.Triples.Sort());
-                ext.Store(ext.GetType().Name + "_Compression.txt");
-                long compressedSize = new FileInfo(ext.GetType().Name + "_Compression.txt").Length;
-                result += ((double) compressedSize / uncompressedSize).ToString("P2") +"\r\n";
+                result += ext.StorageSpace +"\r\n";
             }
             return result;
         }
 
-        private Tuple<List<bool>, List<List<IEnumerable<Triple>>>> getCorrectValues(List<Triple> testValues, IGraph graph)
+        public static void PrintCSVTable(string csvString)
+        {
+            string[] rows = csvString.Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (rows.Length == 0)
+            {
+                Console.WriteLine("Empty CSV string.");
+                return;
+            }
+
+            int columnCount = rows[0].Split(';').Length;
+
+            // Calculate the maximum width for each column
+            int[] columnWidths = new int[columnCount];
+            for (int i = 0; i < rows.Length; i++)
+            {
+                string[] columns = rows[i].Split(';');
+                for (int j = 0; j < columnCount; j++)
+                {
+                    if (j < columns.Length)
+                    {
+                        int columnLength = columns[j].Length;
+                        if (columnLength > columnWidths[j])
+                            columnWidths[j] = columnLength;
+                    }
+                }
+            }
+
+            // Print the table
+            for (int i = 0; i < rows.Length; i++)
+            {
+                string[] columns = rows[i].Split(';');
+                for (int j = 0; j < columnCount; j++)
+                {
+                    if (j < columns.Length)
+                    {
+                        string column = columns[j].PadRight(columnWidths[j]);
+                        Console.Write(column);
+                    }
+                    Console.Write("  "); // Add some spacing between columns
+                }
+                Console.WriteLine();
+            }
+        }
+
+        private static Tuple<List<bool>, List<List<IEnumerable<Triple>>>> getCorrectValues(List<Triple> testValues, IGraph graph)
         {
             var existsResults = new List<bool>();
             var result = new List<List<IEnumerable<Triple>>>();
@@ -109,16 +152,16 @@ namespace k2extensionsLib
             return new Tuple<List<bool>, List<List<IEnumerable<Triple>>>>(existsResults, result);
         }
 
-        private double GetExecutionTime<T>(ref T result, Func<T> method)
+        private static int GetExecutionTime<T>(ref T result, Func<T> method)
         {
             var watch = System.Diagnostics.Stopwatch.StartNew();
             result = method();
             watch.Stop();
             var elapsedMs = watch.ElapsedMilliseconds;
-            return elapsedMs;
+            return (int)elapsedMs;
         }
 
-        private double GetExecutionTime(Action method)
+        private static double GetExecutionTime(Action method)
         {
             var watch = System.Diagnostics.Stopwatch.StartNew();
             method();

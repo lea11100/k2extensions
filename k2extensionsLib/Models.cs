@@ -50,7 +50,7 @@ namespace k2extensionsLib
 
     }
 
-    internal class DynamicBitArray
+    public class DynamicBitArray
     {
         internal List<ulong> data { get; set; } = new List<ulong>() { 0 };
         internal int firstFreeIndex { get; set; } = 0;
@@ -110,7 +110,7 @@ namespace k2extensionsLib
         }
     }
 
-    internal class FlatPopcount
+    public class FlatPopcount
     {
         //L0-index missing, since optional
 

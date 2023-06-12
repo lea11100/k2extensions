@@ -7,12 +7,8 @@ using VDS.RDF;
 
 namespace k2extensionsLib
 {
-    public class K2ArrayIndex : IK2Extension
+    public abstract class K2ArrayIndex : IK2Extension
     {
-        FlatPopcount _T { get; set; }
-        FlatPopcount _Labels { get; set; }
-        int _StartLeaves { get; set; }
-        int _K { get; set; }
         private bool _UseK2Triples { get; set; }
         int _Size
         {
@@ -21,6 +17,10 @@ namespace k2extensionsLib
                 return Math.Max(Subjects.Length, Objects.Length);
             }
         }
+        protected FlatPopcount _Labels { get; set; }
+        protected int _StartLeaves { get; set; }
+        protected FlatPopcount _T { get; set; }
+        protected int _K { get; set; }
 
         public INode[] Subjects { get; set; }
         public INode[] Objects { get; set; }
@@ -48,7 +48,7 @@ namespace k2extensionsLib
 
         public void Compress(IGraph graph, bool useK2Triples)
         {
-            var labels = new DynamicBitArray();
+            var labels = new List<ulong>();
             _UseK2Triples = useK2Triples;
             Subjects = graph.Triples.Select(x => x.Subject).Distinct().ToArray();
             Objects = graph.Triples.Select(x => x.Object).Distinct().ToArray();
@@ -86,7 +86,8 @@ namespace k2extensionsLib
 
             _FindPaths(root, ref levels, ref labels, 0);
 
-            _Labels = new FlatPopcount(labels);
+            _BuildLabels(labels);
+
             var n = new DynamicBitArray();
             foreach (var l in levels.Take(levels.Count - 1))
             {
@@ -101,15 +102,7 @@ namespace k2extensionsLib
         {
             var result = new List<Triple>();
             int positionInTypes = Array.IndexOf(Predicates, p);
-            var nodesWithType = new List<int>();
-            int counter = positionInTypes;
-            int index = 0;
-            while (counter < _Labels.Length())
-            {
-                if (_Labels[counter]) nodesWithType.Add(index);
-                counter += Predicates.Length;
-                index++;
-            }
+            List<int> nodesWithType = _GetNodesWithType(positionInTypes);            
             foreach (var n in nodesWithType)
             {
                 //long positionInNodes = _StartLeaves + n * Predicates.Count();
@@ -234,6 +227,12 @@ namespace k2extensionsLib
             }
         }
 
+        protected abstract void _BuildLabels(List<ulong> labels);
+
+        protected abstract INode[] _GetLabelFormLeafPosition(int position);
+
+        protected abstract List<int> _GetNodesWithType(int positionOfType);
+
         private TreeNode _BuildK2Tree(IGraph g, int h)
         {
             var root = new TreeNode(_K * _K);
@@ -270,11 +269,11 @@ namespace k2extensionsLib
             return root;
         }
 
-        private void _FindPaths(TreeNode node, ref List<DynamicBitArray> dynT, ref DynamicBitArray dynLabels, int level)
+        private void _FindPaths(TreeNode node, ref List<DynamicBitArray> dynT, ref List<ulong> labels, int level)
         {
             if (level == dynT.Count)
             {
-                dynLabels.AddRange(node.GetLabel(), Predicates.Length);
+                labels.Add(node.GetLabel());
                 return;
             }
             uint n = 0;
@@ -284,41 +283,11 @@ namespace k2extensionsLib
                 if (child != null)
                 {
                     n += (uint)1 << (31 - i);
-                    _FindPaths(child, ref dynT, ref dynLabels, level + 1);
+                    _FindPaths(child, ref dynT, ref labels, level + 1);
                 }
             }
             dynT[level].AddRange(n, _K * _K);
-        }
-
-        private INode[] _GetLabelFormLeafPosition(int position)
-        {
-            int rankInLeaves = _T.Rank1(position, _StartLeaves) - 1;
-            ulong[] l = _Labels[(Predicates.Length * rankInLeaves)..(Predicates.Length * rankInLeaves + Predicates.Length)];
-            var result = _GetPredicatesFromBitStream(l);
-            return result.ToArray();
-        }
-
-        private INode[] _GetPredicatesFromBitStream(ulong[] stream)
-        {
-            int position = 0;
-            var result = new List<INode>();
-            foreach (var block in stream)
-            {
-                for (int j = 63; j >= 0; j--)
-                {
-                    if ((block & ((ulong)1 << j)) != 0)
-                    {
-                        result.Add(Predicates.ElementAt(position));
-                    }
-                    position++;
-                    if (position >= Predicates.Length)
-                    {
-                        return result.ToArray();
-                    }
-                }
-            }
-            return result.ToArray();
-        }
+        }       
 
         /// <summary>
         /// Returns the cell-coordinates for a specific position in the leaves 
@@ -376,6 +345,65 @@ namespace k2extensionsLib
             }
             return result.ToArray();
         }
+    }
+
+    public class K2ArrayIndexPositional : K2ArrayIndex
+    {
+        public K2ArrayIndexPositional(int k) : base(k) { }
+
+        protected override void _BuildLabels(List<ulong> labels)
+        {
+            var dynamicLabels = new DynamicBitArray();
+            foreach (var label in labels)
+            {
+                dynamicLabels.AddRange(label, Predicates.Length);
+            }
+            _Labels = new FlatPopcount(dynamicLabels);
+        }
+
+        protected override INode[] _GetLabelFormLeafPosition(int position)
+        {
+            int rankInLeaves = _T.Rank1(position, _StartLeaves) - 1;
+            ulong[] l = _Labels[(Predicates.Length * rankInLeaves)..(Predicates.Length * rankInLeaves + Predicates.Length)];
+            var result = _GetPredicatesFromBitStream(l);
+            return result.ToArray();
+        }
+
+        protected override List<int> _GetNodesWithType(int positionOfType)
+        {
+            var result = new List<int>();
+            int counter = positionOfType;
+            int index = 0;
+            while (counter < _Labels.Length())
+            {
+                if (_Labels[counter]) result.Add(index);
+                counter += Predicates.Length;
+                index++;
+            }
+            return result;
+        }
+
+        private INode[] _GetPredicatesFromBitStream(ulong[] stream)
+        {
+            int position = 0;
+            var result = new List<INode>();
+            foreach (var block in stream)
+            {
+                for (int j = 63; j >= 0; j--)
+                {
+                    if ((block & ((ulong)1 << j)) != 0)
+                    {
+                        result.Add(Predicates.ElementAt(position));
+                    }
+                    position++;
+                    if (position >= Predicates.Length)
+                    {
+                        return result.ToArray();
+                    }
+                }
+            }
+            return result.ToArray();
+        }        
     }
 
 }

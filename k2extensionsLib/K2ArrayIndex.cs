@@ -406,4 +406,22 @@ namespace k2extensionsLib
         }        
     }
 
+    public class K2ArrayIndexK2 : K2ArrayIndex
+    {
+        protected override void _BuildLabels(List<ulong> labels)
+        {
+            throw new NotImplementedException();
+        }
+
+        protected override INode[] _GetLabelFormLeafPosition(int position)
+        {
+            throw new NotImplementedException();
+        }
+
+        protected override List<int> _GetNodesWithType(int positionOfType)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
 }

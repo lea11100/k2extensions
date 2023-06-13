@@ -17,6 +17,11 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace k2extensionsLib
 {
+    public class K2Tree
+    {
+
+    }
+
     public class TreeNode
     {
         public TreeNode[] Children { get; set; }

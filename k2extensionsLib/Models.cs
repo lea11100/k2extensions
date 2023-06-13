@@ -1,6 +1,7 @@
 ﻿using J2N.Collections.Generic.Extensions;
 using Lucene.Net.Analysis.Miscellaneous;
 using Lucene.Net.Util;
+using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using System;
 using System.Collections;
@@ -12,14 +13,115 @@ using System.Runtime.Intrinsics.X86;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using VDS.RDF;
+using VDS.RDF.Query.Algebra;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace k2extensionsLib
 {
     public class K2Tree
     {
+        int _K { get; }
+        internal int _Size { get { return Math.Max(_Row, _Cols); } }
+        internal int _Row { get; }
+        internal int _Cols { get; }
+        internal FlatPopcount T { get; set; }
 
+        public K2Tree(int k, int row, int cols)
+        {
+            T = new FlatPopcount();
+            _K = k;
+            _Row = row;
+            _Cols = cols;   
+        }
+
+        public void Store(IEnumerable<(int,int)> cells)
+        {
+            int size = Math.Max(_Row, _Cols);
+            int N = _K;
+            int h = 1;
+            while (N < size)
+            {
+                N *= _K;
+                h++;
+            }
+            var root = new TreeNode(_K * _K);
+            var paths = from c in cells
+                        select Enumerable.Zip(c.Item1.ToBase(_K, h), c.Item2.ToBase(_K, h));
+
+            foreach (IEnumerable<(int, int)> path in paths)
+            {
+                var currentNode = root;
+                foreach ((int, int) p in path)
+                {
+                    int quadrant = p.Item1 * _K + p.Item2;
+                    var child = new TreeNode(_K * _K);
+                    currentNode = currentNode.SetChild(quadrant, child);
+                }
+
+            }
+
+            List<DynamicBitArray> dynT = new();
+            for (int i = 0; i < h; i++)
+            {
+                dynT.Add(new DynamicBitArray());
+            }
+            _FindPaths(root, ref dynT, 0);
+            var flatT = new DynamicBitArray();
+            for (int i = 0; i < dynT.Count; i++)
+            {
+                flatT.AddRange(dynT[i]);
+            }
+            T = new FlatPopcount(flatT);
+        }
+
+        public (int,int)[] FindNodes(int positionInNodes, List<(int?, int?)> searchPath, List<(int, int)> parentPath)
+        {
+            var result = new List<(int, int)>();
+            (int?, int?) position = searchPath[0];
+            searchPath = searchPath.Skip(1).ToList();
+            for (int s = position.Item1 ?? 0; s < (position.Item1 + 1 ?? _K); s++)
+            {
+                for (int o = position.Item2 ?? 0; o < (position.Item2 + 1 ?? _K); o++)
+                {
+                    int relativePosition = s * _K + o;
+                    int pos = positionInNodes + relativePosition;
+                    List<(int, int)> parent = parentPath.Append((s, o)).ToList();
+                    if (searchPath.Count == 0 && T[pos])
+                    {
+                        int posR = parent.Select(x => x.Item1).FromBase(_K);
+                        int posC = parent.Select(x => x.Item2).FromBase(_K);
+                        result.Add((posR,posC));
+                    }
+                    else if (T[pos])
+                    {
+                        pos = T.Rank1(pos) * _K * _K;
+                        result.AddRange(FindNodes(pos, searchPath, parent));
+                    }
+                }
+            }
+            return result.ToArray();
+        }
+
+        private void _FindPaths(TreeNode node, ref List<DynamicBitArray> dynT, int level)
+        {
+            if (level == dynT.Count)
+            {
+                return;
+            }
+            uint n = 0;
+            for (int i = 0; i < _K * _K; i++)
+            {
+                var child = node.GetChild(i);
+                if (child != null)
+                {
+                    n += (uint)1 << (31 - i);
+                    _FindPaths(child, ref dynT, level + 1);
+                }
+            }
+            dynT[level].AddRange(n, _K * _K);
+        }
     }
 
     public class TreeNode
@@ -133,14 +235,14 @@ namespace k2extensionsLib
         public FlatPopcount(DynamicBitArray array)
         {
             _Data = array.data.ToArray();
-            _L1L2Index = new UInt128[(int)Math.Ceiling((double)_Data.Length/64)];
+            _L1L2Index = new UInt128[(int)Math.Ceiling((double)_Data.Length / 64)];
             _SampelsOfOnePositions = Array.Empty<long>();
             Init();
         }
 
         internal string GetDataAsString()
         {
-            var result = string.Join("", _Data.Select(x=>x.ToChars()));
+            var result = string.Join("", _Data.Select(x => x.ToChars()));
             return result;
         }
 
@@ -193,7 +295,7 @@ namespace k2extensionsLib
                 {
                     numberOfOnesBeforeEachL2[indexForL2] = numberOfOnesBeforeL2;
                     var temp = l2.Select(BitOperations.PopCount).Sum();
-                    if((numberOfOnesBeforeL2 + numberOfOnesBeforeL1)>>>13 != (numberOfOnesBeforeL2 + temp + numberOfOnesBeforeL1) >>> 13)
+                    if ((numberOfOnesBeforeL2 + numberOfOnesBeforeL1) >>> 13 != (numberOfOnesBeforeL2 + temp + numberOfOnesBeforeL1) >>> 13)
                     {
                         long remainingOnes = ((((numberOfOnesBeforeL2 + numberOfOnesBeforeL1) >>> 13) + 1) << 13) - (numberOfOnesBeforeL2 + numberOfOnesBeforeL1);
                         int relativePosition = Select1In512(l2, (int)remainingOnes);
@@ -228,11 +330,11 @@ namespace k2extensionsLib
                     }
                     mask >>= 1;
                     mask += ulong.MaxValue << 63;
-                } 
+                }
             }
             throw new Exception();
         }
-        
+
         private static UInt128 _InitL1L2(long onesBeforeL1, int[] onesInL2)
         {
             UInt128 result = 0;
@@ -295,19 +397,19 @@ namespace k2extensionsLib
             int l1 = (int)(position >> 12);
             position = l1 * 4096;
             int remainingOnes = nthOne;
-            while ((l1+1)< _L1L2Index.Length && getL1(l1 + 1) < nthOne)
+            while ((l1 + 1) < _L1L2Index.Length && getL1(l1 + 1) < nthOne)
             {
                 l1++;
                 position += 1L << 12;
             }
             remainingOnes -= getL1(l1);
             int l2 = 0;
-            while (l2 <= 6 && getL2(l1,l2) < remainingOnes)
+            while (l2 <= 6 && getL2(l1, l2) < remainingOnes)
             {
                 l2++;
                 position += 1L << 9;
             }
-            if (l2>0) remainingOnes -= getL2(l1, l2-1);
+            if (l2 > 0) remainingOnes -= getL2(l1, l2 - 1);
             position += Select1In512(_Data[(l1 * 64 + l2 * 8)..].Take(8).ToArray(), remainingOnes);
             return position;
         }
@@ -345,7 +447,7 @@ namespace k2extensionsLib
             Assert.AreEqual(position, l1 * 4096 + l2 * 512 + l3 * 64 + relativePositionInL3);
 
             int result = getRankByBlocks(l1, l2, l3, relativePositionInL3);
-            return result - ignoredOnes; 
+            return result - ignoredOnes;
         }
 
         private int getRankByBlocks(int l1, int l2, int l3, int relativePositionInL3)

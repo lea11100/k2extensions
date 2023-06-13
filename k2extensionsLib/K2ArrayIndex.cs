@@ -1,9 +1,12 @@
-﻿using System;
+﻿using ICSharpCode.SharpZipLib.Zip;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using VDS.RDF;
+using VDS.RDF.Shacl.Validation;
 
 namespace k2extensionsLib
 {
@@ -17,14 +20,14 @@ namespace k2extensionsLib
                 return Math.Max(Subjects.Length, Objects.Length);
             }
         }
-        protected FlatPopcount _Labels { get; set; }
+        protected virtual FlatPopcount _Labels { get; set; } = new();
         protected int _StartLeaves { get; set; }
-        protected FlatPopcount _T { get; set; }
+        protected FlatPopcount _T { get; set; } = new ();
         protected int _K { get; set; }
 
-        public INode[] Subjects { get; set; }
-        public INode[] Objects { get; set; }
-        public INode[] Predicates { get; set; }
+        public INode[] Subjects { get; set; } = Array.Empty<INode>();
+        public INode[] Objects { get; set; } = Array.Empty<INode>();
+        public INode[] Predicates { get; set; } = Array.Empty<INode>();
         public int StorageSpace
         {
             get
@@ -38,12 +41,6 @@ namespace k2extensionsLib
         public K2ArrayIndex(int k)
         {
             _K = k;
-            _UseK2Triples = false;
-            _T = new FlatPopcount();
-            _Labels = new FlatPopcount();
-            Subjects = Array.Empty<INode>();
-            Predicates = Array.Empty<INode>();
-            Objects = Array.Empty<INode>();
         }
 
         public void Compress(IGraph graph, bool useK2Triples)
@@ -102,7 +99,7 @@ namespace k2extensionsLib
         {
             var result = new List<Triple>();
             int positionInTypes = Array.IndexOf(Predicates, p);
-            List<int> nodesWithType = _GetNodesWithType(positionInTypes);            
+            List<int> nodesWithType = _GetNodesWithType(positionInTypes);
             foreach (var n in nodesWithType)
             {
                 //long positionInNodes = _StartLeaves + n * Predicates.Count();
@@ -229,7 +226,7 @@ namespace k2extensionsLib
 
         protected abstract void _BuildLabels(List<ulong> labels);
 
-        protected abstract INode[] _GetLabelFormLeafPosition(int position);
+        protected abstract INode[] _GetLabelFromLeafPosition(int position);
 
         protected abstract List<int> _GetNodesWithType(int positionOfType);
 
@@ -287,7 +284,7 @@ namespace k2extensionsLib
                 }
             }
             dynT[level].AddRange(n, _K * _K);
-        }       
+        }
 
         /// <summary>
         /// Returns the cell-coordinates for a specific position in the leaves 
@@ -332,7 +329,8 @@ namespace k2extensionsLib
                     {
                         int posS = parent.Select(x => x.Item1).FromBase(_K);
                         int posO = parent.Select(x => x.Item2).FromBase(_K);
-                        INode[] preds = _GetLabelFormLeafPosition(pos);
+                        int rankInLeaves = _T.Rank1(pos, _StartLeaves) - 1;
+                        INode[] preds = _GetLabelFromLeafPosition(rankInLeaves);
                         if (predicate != null) preds = preds.Where(x => x.Equals(predicate)).ToArray();
                         if (preds.Length != 0) result.AddRange(preds.Select(x => new Triple(Subjects.ElementAt(posS), x, Objects.ElementAt(posO))));
                     }
@@ -361,10 +359,9 @@ namespace k2extensionsLib
             _Labels = new FlatPopcount(dynamicLabels);
         }
 
-        protected override INode[] _GetLabelFormLeafPosition(int position)
+        protected override INode[] _GetLabelFromLeafPosition(int position)
         {
-            int rankInLeaves = _T.Rank1(position, _StartLeaves) - 1;
-            ulong[] l = _Labels[(Predicates.Length * rankInLeaves)..(Predicates.Length * rankInLeaves + Predicates.Length)];
+            ulong[] l = _Labels[(Predicates.Length * position)..(Predicates.Length * position + Predicates.Length)];
             var result = _GetPredicatesFromBitStream(l);
             return result.ToArray();
         }
@@ -403,24 +400,56 @@ namespace k2extensionsLib
                 }
             }
             return result.ToArray();
-        }        
+        }
     }
 
     public class K2ArrayIndexK2 : K2ArrayIndex
     {
+        private K2Tree _LabelTree { get; set; } = new(0,0,0);
+        protected override FlatPopcount _Labels { get => _LabelTree.T; set => _LabelTree.T = value; }
+
+        public K2ArrayIndexK2(int k) : base(k) { }
+
         protected override void _BuildLabels(List<ulong> labels)
         {
-            throw new NotImplementedException();
+            _LabelTree = new K2Tree(_K, labels.Count, Predicates.Length);
+            var cells = labels.SelectMany((x, i) => _ExtractLabelPositions(x).Select(y => (i, y)));
+            _LabelTree.Store(cells);
         }
 
-        protected override INode[] _GetLabelFormLeafPosition(int position)
+        protected override INode[] _GetLabelFromLeafPosition(int position)
         {
-            throw new NotImplementedException();
+            List<(int?, int?)> path = (from p in position.ToBase(_K, _LabelTree._Size.ToBase(_K).Length)                                     
+                                       select ((int?)p, (int?)null)).ToList();
+
+            var cells = _LabelTree.FindNodes(0, path, new List<(int, int)>());
+            var result = cells.Select(x => Predicates[x.Item2]);
+            return result.ToArray();
         }
 
         protected override List<int> _GetNodesWithType(int positionOfType)
         {
-            throw new NotImplementedException();
+            List<(int?, int?)> path = (from p in positionOfType.ToBase(_K, _LabelTree._Size.ToBase(_K).Length)
+                                       select ((int?)null, (int?)p)).ToList();
+
+            var cells = _LabelTree.FindNodes(0, path, new List<(int, int)>());
+            var result = cells.Select(x => x.Item1);
+            return result.ToList();
+        }
+
+        private List<int> _ExtractLabelPositions(ulong label)
+        {
+            ulong mask = 1ul << 63;
+            var result = new List<int>();
+            for (int i = 0; i < Predicates.Length; i++)
+            {
+                if ((mask & label) != 0)
+                {
+                    result.Add(i);
+                }
+                mask >>= 1;
+            }
+            return result;
         }
     }
 

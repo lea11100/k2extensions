@@ -43,7 +43,7 @@ namespace k2extensionsLib
             _K = k;
         }
 
-        public void Compress(IGraph graph, bool useK2Triples)
+        public void Compress(TripleStore graph, bool useK2Triples)
         {
             var labels = new List<ulong>();
             _UseK2Triples = useK2Triples;
@@ -230,7 +230,7 @@ namespace k2extensionsLib
 
         protected abstract List<int> _GetNodesWithType(int positionOfType);
 
-        private TreeNode _BuildK2Tree(IGraph g, int h)
+        private TreeNode _BuildK2Tree(TripleStore g, int h)
         {
             var root = new TreeNode(_K * _K);
 

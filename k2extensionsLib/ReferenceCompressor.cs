@@ -55,7 +55,7 @@ namespace k2extensionsLib
             return result;
         }
 
-        public void Compress(IGraph graph, bool useK2Triples)
+        public void Compress(TripleStore graph, bool useK2Triples)
         {
             this._UseK2Triples = useK2Triples;
             Subjects = graph.Triples.Select(x => x.Subject).Distinct().ToArray();
@@ -216,7 +216,7 @@ namespace k2extensionsLib
             return result;
         }
 
-        private TreeNode _BuildK3(IGraph g, int h)
+        private TreeNode _BuildK3(TripleStore g, int h)
         {
             var root = new TreeNode(_K * _K * _K);
 
@@ -329,7 +329,7 @@ namespace k2extensionsLib
             _UseK2Triples = false;
         }
 
-        public void Compress(IGraph graph, bool useK2Triples)
+        public void Compress(TripleStore graph, bool useK2Triples)
         {
             DynamicBitArray[] dynT = Array.Empty<DynamicBitArray>();
             _UseK2Triples = useK2Triples;
@@ -360,7 +360,7 @@ namespace k2extensionsLib
             foreach (var pred in Predicates)
             {
                 var treeForPred = new K2Tree(_K, Subjects.Length, Objects.Length);
-                var cells = from triple in graph.GetTriplesWithPredicate(pred)
+                var cells = from triple in graph.Triples.WithPredicate(pred)
                             select (Array.IndexOf(Subjects.ToArray(), triple.Subject), Array.IndexOf(Objects.ToArray(), triple.Object));
 
                 treeForPred.Store(cells);

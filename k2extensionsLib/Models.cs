@@ -1,4 +1,5 @@
-﻿using J2N.Collections.Generic.Extensions;
+﻿using HtmlAgilityPack;
+using J2N.Collections.Generic.Extensions;
 using Lucene.Net.Analysis.Miscellaneous;
 using Lucene.Net.Util;
 using Newtonsoft.Json.Linq;
@@ -9,6 +10,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Headers;
 using System.Numerics;
+using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -33,10 +35,10 @@ namespace k2extensionsLib
             T = new FlatPopcount();
             _K = k;
             _Row = row;
-            _Cols = cols;   
+            _Cols = cols;
         }
 
-        public void Store(IEnumerable<(int,int)> cells)
+        public void Store(IEnumerable<(int, int)> cells)
         {
             int size = Math.Max(_Row, _Cols);
             int N = _K;
@@ -76,7 +78,7 @@ namespace k2extensionsLib
             T = new FlatPopcount(flatT);
         }
 
-        public (int,int)[] FindNodes(int positionInNodes, List<(int?, int?)> searchPath, List<(int, int)> parentPath)
+        public (int, int)[] FindNodes(int positionInNodes, List<(int?, int?)> searchPath, List<(int, int)> parentPath)
         {
             var result = new List<(int, int)>();
             (int?, int?) position = searchPath[0];
@@ -92,7 +94,7 @@ namespace k2extensionsLib
                     {
                         int posR = parent.Select(x => x.Item1).FromBase(_K);
                         int posC = parent.Select(x => x.Item2).FromBase(_K);
-                        result.Add((posR,posC));
+                        result.Add((posR, posC));
                     }
                     else if (T[pos])
                     {
@@ -286,6 +288,10 @@ namespace k2extensionsLib
             long numberOfOnesBeforeL1 = 0;
             var sampels = new List<long>() { 0 };
             int index = 0;
+            if(_Data.Length % 64 != 0)
+            {
+                _Data = _Data.Concat(Enumerable.Repeat(0UL, 64 - _Data.Length % 64)).ToArray();
+            }
             foreach (var l1 in _Data.Chunk(64))
             {
                 int numberOfOnesBeforeL2 = 0;
@@ -317,20 +323,17 @@ namespace k2extensionsLib
             int index = 0;
             foreach (var item in array)
             {
-                oneCounter += BitOperations.PopCount(item);
-                index += 64;
-                if (oneCounter < nthOne) continue;
-                int remainingOnes = nthOne - oneCounter + BitOperations.PopCount(item);
-                ulong mask = ulong.MaxValue << 63;
-                for (int i = 0; i < 64; i++)
+                int popcnt = BitOperations.PopCount(item);
+                oneCounter += popcnt;
+                if (oneCounter < nthOne)
                 {
-                    if (remainingOnes == BitOperations.PopCount(item & mask))
-                    {
-                        return index - 64 + i;
-                    }
-                    mask >>= 1;
-                    mask += ulong.MaxValue << 63;
+                    index += 64;
+                    continue;
                 }
+                int remainingOnes = nthOne - oneCounter + popcnt;
+                ulong mask = 1UL << (popcnt - remainingOnes);
+                ulong pbd = Bmi2.X64.ParallelBitDeposit(mask, item);
+                return index + (int)ulong.LeadingZeroCount(pbd);
             }
             throw new Exception();
         }
@@ -393,9 +396,10 @@ namespace k2extensionsLib
 
         internal long Select1(int nthOne)
         {
+            //Get L1
             long position = _SampelsOfOnePositions[nthOne >> 13];
             int l1 = (int)(position >> 12);
-            position = l1 * 4096;
+            position = l1 << 12;
             int remainingOnes = nthOne;
             while ((l1 + 1) < _L1L2Index.Length && getL1(l1 + 1) < nthOne)
             {
@@ -403,13 +407,26 @@ namespace k2extensionsLib
                 position += 1L << 12;
             }
             remainingOnes -= getL1(l1);
-            int l2 = 0;
-            while (l2 <= 6 && getL2(l1, l2) < remainingOnes)
-            {
-                l2++;
-                position += 1L << 9;
-            }
-            if (l2 > 0) remainingOnes -= getL2(l1, l2 - 1);
+
+            //Get L2
+            byte[] bytes = BitConverter.GetBytes((ulong)(_L1L2Index[l1] >>> 64)).Reverse().Concat(BitConverter.GetBytes((ulong)_L1L2Index[l1]).Reverse()).ToArray(); //"Reverse()" to convert to big endian
+            Vector128<byte> v = Vector128.Create(bytes);
+            //Positions:    00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15
+            //Shuffeled:    05 06 07 08 08 09 10 11 11 12 13 14 14 15 -1 -1
+            //To big endian:06 05 08 07 09 08 11 10 12 11 14 13 15 14 -1 -1
+            //Vector128<byte> shuffle_mask = Vector128.Create(1,2,15,0,14,15,12,13,11,12,9,10,8,9,-1,-1).AsByte();
+            Vector128<byte> shuffle_mask = Vector128.Create(-1, -1, 06, 05, 08, 07, 09, 08, 11, 10, 12, 11, 14, 13, 15, 14).AsByte();
+            Vector128<byte> v_shuffeled = Ssse3.Shuffle(v.AsByte(), shuffle_mask);
+            Vector128<ushort> upper = Sse2.And(v_shuffeled.AsUInt16(), Vector128.Create((ushort)0b111111111111));
+            Vector128<ushort> lower = Sse2.ShiftRightLogical(v_shuffeled.AsUInt16(), 4);
+            Vector128<ushort> blocks = Sse41.Blend(lower, upper, 0b10101010);
+            Vector128<short> comp = Sse2.CompareGreaterThan(Vector128.Create((short)remainingOnes), blocks.AsInt16());
+            int mask = Sse2.MoveMask(comp.AsByte());
+            var l2 = (int)Popcnt.PopCount((uint)mask) / 2 - 1;
+            position += l2 * (1L << 9);
+            remainingOnes -= blocks[l2];
+
+            //Get position in L2-Block
             position += Select1In512(_Data[(l1 * 64 + l2 * 8)..].Take(8).ToArray(), remainingOnes);
             return position;
         }
@@ -417,13 +434,6 @@ namespace k2extensionsLib
         private int getL1(int position)
         {
             return (int)(_L1L2Index[position] >>> 84);
-        }
-
-        private int getL2(int positionL1, int positionL2)
-        {
-            UInt128 mask = UInt128.MaxValue >>> 44 >>> (positionL2 * 12);
-            int result = (int)((_L1L2Index[positionL1] & mask) >>> ((6 - positionL2) * 12));
-            return result;
         }
 
         /// <summary>
@@ -444,8 +454,6 @@ namespace k2extensionsLib
             int l2 = block % 64 / 8;
             int l3 = block % 8;
             int relativePositionInL3 = position % 64;
-            Assert.AreEqual(position, l1 * 4096 + l2 * 512 + l3 * 64 + relativePositionInL3);
-
             int result = getRankByBlocks(l1, l2, l3, relativePositionInL3);
             return result - ignoredOnes;
         }
@@ -453,26 +461,23 @@ namespace k2extensionsLib
         private int getRankByBlocks(int l1, int l2, int l3, int relativePositionInL3)
         {
             int result = 0;
+            //Get L1
             UInt128 blockIndex = _L1L2Index[l1];
             result += (int)(blockIndex >>> 84);
 
-            blockIndex <<= 44;
-            int l2_temp = l2;
-            if (l2_temp != 0)
+            //Get L2
+            if (l2 != 0)
             {
-                while (l2_temp > 1)
-                {
-                    blockIndex <<= 12;
-                    l2_temp--;
-                }
+                blockIndex <<= 44 + (l2 - 1) * 12;
                 result += (int)(blockIndex >>> 116);
             }
 
+            //Get 64-Bit-Block in L2-Block
             ulong[] block512 = _Data[(l1 * 64 + l2 * 8)..(l1 * 64 + l2 * 8 + l3)];
             result += block512.Select(BitOperations.PopCount).Sum();
 
+            //Get last block
             ulong blockInBlock512 = _Data[l1 * 64 + l2 * 8 + l3];
-
             result += BitOperations.PopCount(blockInBlock512 & (ulong.MaxValue << (63 - relativePositionInL3)));
 
             return result;
@@ -485,7 +490,7 @@ namespace k2extensionsLib
         INode[] Objects { get; set; }
         INode[] Predicates { get; set; }
         int StorageSpace { get; }
-        void Compress(IGraph graph, bool useK2Triples);
+        void Compress(TripleStore graph, bool useK2Triples);
         Triple[] Decomp();
         Triple[] Prec(INode o);
         Triple[] Succ(INode s);

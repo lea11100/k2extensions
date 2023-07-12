@@ -91,7 +91,7 @@ namespace k2extensionsLib
             {
                 n.AddRange(l);
             }
-            _StartLeaves = (n.data.Count - 1) * 64 + n.firstFreeIndex;
+            _StartLeaves = (n.data.Count - 1) * 64 + n.lastUsedIndex + 1;
             n.AddRange(levels.Last());
             _T = new FlatPopcount(n);
         }

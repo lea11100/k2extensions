@@ -162,37 +162,30 @@ namespace k2extensionsLib
     public class DynamicBitArray
     {
         internal List<ulong> data { get; set; } = new List<ulong>() { 0 };
-        internal int firstFreeIndex { get; set; } = 0;
-
-        public bool this[int index] { get => (data[index / 64] & ((ulong)1 << (index % 64))) != 0; set => data[index / 64] += (ulong)1 << (index % 64); }
+        internal int lastUsedIndex { get; set; } = -1;
 
         public void AddRange(uint array, int length)
         {
-            //array <<= 32 - length;
-            ulong firstPart = (ulong)array << 32 >>> firstFreeIndex;
-            ulong secondPart = (ulong)array << (32 + (64 - firstFreeIndex));
-            data[^1] += firstPart;
-            firstFreeIndex += length;
-            if (firstFreeIndex >= 64)
-            {
-                data.Add(secondPart);
-            }
-            firstFreeIndex %= 64;
+            AddRange(((ulong)array)<<32, length);
         }
 
         public void AddRange(ulong array, int length)
         {
-            ulong firstPart = array >>> firstFreeIndex;
-            ulong secondPart = 0;
-            if (firstFreeIndex != 0)
-                secondPart = array << (64 - firstFreeIndex);
-            data[^1] += firstPart;
-            firstFreeIndex += length;
-            if (firstFreeIndex >= 64)
+            ulong firstPart = array >>> (lastUsedIndex + 1);
+            ulong secondPart = array << (63 - lastUsedIndex);
+            if (lastUsedIndex == 63)
             {
-                data.Add(secondPart);
+                data.Add(firstPart);
+                lastUsedIndex = length - 1;
             }
-            firstFreeIndex %= 64;
+            else
+            {
+                data[^1] += firstPart;
+                lastUsedIndex += length;
+                if (lastUsedIndex >= 64)
+                    data.Add(secondPart);
+                lastUsedIndex %= 64;
+            }
         }
 
         public void AddRange(DynamicBitArray array)
@@ -201,10 +194,7 @@ namespace k2extensionsLib
             {
                 AddRange(item, 64);
             }
-            if (array.firstFreeIndex != 0)
-            {
-                AddRange(array.data[^1], array.firstFreeIndex);
-            }
+            AddRange(array.data[^1], array.lastUsedIndex + 1);
         }
 
         public string GetAsString()
@@ -214,7 +204,7 @@ namespace k2extensionsLib
             {
                 res += Convert.ToString((long)d, 2).PadLeft(64, '0');
             }
-            res += Convert.ToString((long)data[^1], 2).PadLeft(64, '0')[..firstFreeIndex];
+            res += Convert.ToString((long)data[^1], 2).PadLeft(64, '0')[..(lastUsedIndex+1)];
             return res;
         }
     }

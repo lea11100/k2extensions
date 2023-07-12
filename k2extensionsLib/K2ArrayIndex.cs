@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 using VDS.RDF;
@@ -130,7 +131,7 @@ namespace k2extensionsLib
             return result;
         }
 
-        public bool Exists(INode s, INode p, INode o)
+        public Triple[] Exists(INode s, INode p, INode o)
         {
             List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
                                        from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
@@ -138,7 +139,7 @@ namespace k2extensionsLib
                                        select ((int?)subj.v, (int?)obj.v)).ToList();
 
             var result = _FindNodesRec(0, path, p, new List<(int, int)>());
-            return result.Any();
+            return result;
         }
 
         public Triple[] Prec(INode o)
@@ -195,7 +196,7 @@ namespace k2extensionsLib
             }
         }
 
-        public void Load(string filename, bool useK2Triple)
+        public void Load(string filename)
         {
             using var sr = new StreamReader(filename);
             string line = sr.ReadLine() ?? "";
@@ -207,7 +208,7 @@ namespace k2extensionsLib
             _Labels.Store(line);
             line = sr.ReadLine() ?? "";
             Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x)).ToArray();
-            if (useK2Triple)
+            if (_UseK2Triples)
             {
                 line = sr.ReadLine() ?? "";
                 var so = line.Split(" ").Select(x => nf.CreateLiteralNode(x));

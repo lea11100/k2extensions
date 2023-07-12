@@ -486,21 +486,67 @@ namespace k2extensionsLib
 
     public interface IK2Extension
     {
+        /// <summary>
+        /// Nodes that belong to the rows of the adjacency matrix
+        /// </summary>
         INode[] Subjects { get; set; }
+        /// <summary>
+        /// Nodes that belong to the columns of the adjacency matrix
+        /// </summary>
         INode[] Objects { get; set; }
+        /// <summary>
+        /// Nodes that belong to the different connection types
+        /// </summary>
         INode[] Predicates { get; set; }
+        /// <summary>
+        /// Size of the raw data structure (without overhead of the rank/select data structure
+        /// </summary>
         int StorageSpace { get; }
+        /// <summary>
+        /// Compress the given <see cref="TripleStore"/> using the compression technique of the class. The compression can use k2-triples.
+        /// </summary>
         void Compress(TripleStore graph, bool useK2Triples);
+        /// <summary>
+        /// Retrieve all <see cref="Triple"/> of the graph
+        /// </summary>
         Triple[] Decomp();
+        /// <summary>
+        /// Retrieve all ingoing edges of a given node
+        /// </summary>
         Triple[] Prec(INode o);
+        /// <summary>
+        /// Retrieve all outgoing edges of a given node
+        /// </summary>
         Triple[] Succ(INode s);
+        /// <summary>
+        /// Retrieve all edges of a specific type which is specified as a <see cref="INode"/>
+        /// </summary>
         Triple[] AllEdgesOfType(INode p);
+        /// <summary>
+        /// Retrieve all edges that connect two given nodes
+        /// </summary>
         Triple[] Connections(INode s, INode o);
+        /// <summary>
+        /// Retrieve all ingoing edges of a given node which belong to a specific edges type
+        /// </summary>
         Triple[] PrecOfType(INode o, INode p);
+        /// <summary>
+        /// Retrieve all outgoing edges of a given node which belong to a specific edges type
+        /// </summary>
         Triple[] SuccOfType(INode s, INode p);
-        bool Exists(INode s, INode p, INode o);
+        /// <summary>
+        /// Indicates whether an edge of a speciffic type exists between to given nodes
+        /// </summary>
+        Triple[] Exists(INode s, INode p, INode o);
+        /// <summary>
+        /// Store the tree structure in a given file. This also stores the information about the nodes in <see cref="Subjects"/>, <see cref="Objects"/> and <see cref="Predicates"/>.
+        /// </summary>
+        /// <param name="filename"></param>
         void Store(string filename);
-        void Load(string filename, bool useK2Triple);
+        /// <summary>
+        /// Load a tree structure from a file
+        /// </summary>
+        void Load(string filename);
     }
 
     internal static class GeneralExtensions

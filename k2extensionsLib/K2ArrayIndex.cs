@@ -22,7 +22,7 @@ namespace k2extensionsLib
             }
         }
         protected virtual FlatPopcount _Labels { get; set; } = new();
-        protected int _StartLeaves { get; set; }
+        protected int _RankUntilLeaves { get; set; }
         protected FlatPopcount _T { get; set; } = new ();
         protected int _K { get; set; }
 
@@ -91,9 +91,10 @@ namespace k2extensionsLib
             {
                 n.AddRange(l);
             }
-            _StartLeaves = (n.data.Count - 1) * 64 + n.lastUsedIndex + 1;
+            int startLeaves = (n.data.Count - 1) * 64 + n.lastUsedIndex + 1;
             n.AddRange(levels.Last());
             _T = new FlatPopcount(n);
+            _RankUntilLeaves = _T.Rank1(startLeaves);
         }
 
         public Triple[] AllEdgesOfType(INode p)
@@ -104,7 +105,7 @@ namespace k2extensionsLib
             foreach (var n in nodesWithType)
             {
                 //long positionInNodes = _StartLeaves + n * Predicates.Count();
-                long positionInNodes = _T.Select1(_T.Rank1(_StartLeaves) + n + 1);
+                long positionInNodes = _T.Select1(_RankUntilLeaves + n + 1);
                 Tuple<int, int> cell = _GetCell(positionInNodes);
                 var r = new Triple(Subjects.ElementAt(cell.Item1), Predicates[positionInTypes], Objects.ElementAt(cell.Item2));
                 result.Add(r);
@@ -179,7 +180,7 @@ namespace k2extensionsLib
         public void Store(string filename)
         {
             using var sw = File.CreateText(filename);
-            sw.WriteLine(_StartLeaves);
+            sw.WriteLine(_RankUntilLeaves);
             sw.WriteLine(_T.GetDataAsString());
             sw.WriteLine(_Labels.GetDataAsString());
             sw.WriteLine(string.Join(" ", Predicates.ToList()));
@@ -201,7 +202,7 @@ namespace k2extensionsLib
             using var sr = new StreamReader(filename);
             string line = sr.ReadLine() ?? "";
             var nf = new NodeFactory(new NodeFactoryOptions());
-            _StartLeaves = int.Parse(line);
+            _RankUntilLeaves = int.Parse(line);
             line = sr.ReadLine() ?? "";
             _T.Store(line);
             line = sr.ReadLine() ?? "";
@@ -330,7 +331,7 @@ namespace k2extensionsLib
                     {
                         int posS = parent.Select(x => x.Item1).FromBase(_K);
                         int posO = parent.Select(x => x.Item2).FromBase(_K);
-                        int rankInLeaves = _T.Rank1(pos, _StartLeaves) - 1;
+                        int rankInLeaves = _T.Rank1(pos) - 1 - _RankUntilLeaves;
                         INode[] preds = _GetLabelFromLeafPosition(rankInLeaves);
                         if (predicate != null) preds = preds.Where(x => x.Equals(predicate)).ToArray();
                         if (preds.Length != 0) result.AddRange(preds.Select(x => new Triple(Subjects.ElementAt(posS), x, Objects.ElementAt(posO))));

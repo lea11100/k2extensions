@@ -427,7 +427,7 @@ namespace k2extensionsLib
         }
 
         /// <summary>
-        /// Rank implementation including the index nad the start, if given
+        /// Rank implementation including the index and the start, if given
         /// </summary>
         /// <param name="position"></param>
         /// <param name="start"></param>

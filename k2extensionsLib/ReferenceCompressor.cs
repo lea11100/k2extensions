@@ -15,7 +15,6 @@ namespace k2extensionsLib
     public class K3 : IK2Extension
     {
         FlatPopcount _T { get; set; }
-        bool _UseK2Triples { get; set; }
         readonly int _K;
         int _Size
         {
@@ -42,7 +41,6 @@ namespace k2extensionsLib
         {
             _K = k;
             _T = new FlatPopcount();
-            _UseK2Triples = false;
             Subjects = Array.Empty<INode>();
             Predicates = Array.Empty<INode>();
             Objects = Array.Empty<INode>();
@@ -58,7 +56,6 @@ namespace k2extensionsLib
 
         public void Compress(TripleStore graph, bool useK2Triples)
         {
-            this._UseK2Triples = useK2Triples;
             Subjects = graph.Triples.Select(x => x.Subject).Distinct().ToArray();
             Objects = graph.Triples.Select(x => x.Object).Distinct().ToArray();
             if (useK2Triples)
@@ -132,31 +129,6 @@ namespace k2extensionsLib
             return result;
         }
 
-        public void Load(string filename)
-        {
-            using var sr = new StreamReader(filename);
-            string line = sr.ReadLine() ?? "";
-            var nf = new NodeFactory(new NodeFactoryOptions());
-            _T.Store(line);
-            line = sr.ReadLine() ?? "";
-            Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x)).ToArray();
-            if (_UseK2Triples)
-            {
-                line = sr.ReadLine() ?? "";
-                var so = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
-                line = sr.ReadLine() ?? "";
-                Subjects = so.Concat(line.Split(" ").Select(x => nf.CreateLiteralNode(x))).ToArray();
-                line = sr.ReadLine() ?? "";
-                Objects = so.Concat(line.Split(" ").Select(x => nf.CreateLiteralNode(x))).ToArray();
-            }
-            else
-            {
-                line = sr.ReadLine() ?? "";
-                Subjects = line.Split(" ").Select(x => nf.CreateLiteralNode(x)).ToArray();
-                Objects = Subjects;
-            }
-        }
-
         public Triple[] Prec(INode o)
         {
             List<(int?, int?, int?)> path = (from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
@@ -177,24 +149,6 @@ namespace k2extensionsLib
 
             Triple[] result = _FindNodesRec(0, path, new List<(int, int, int)>());
             return result;
-        }
-
-        public void Store(string filename)
-        {
-            using var sw = File.CreateText(filename);
-            sw.WriteLine(_T.GetDataAsString());
-            sw.WriteLine(string.Join(" ", Predicates.ToList()));
-            if (_UseK2Triples)
-            {
-                var so = Subjects.Intersect(Objects);
-                sw.WriteLine(string.Join(" ", so));
-                sw.WriteLine(string.Join(" ", Subjects.Where(x => !so.Contains(x))));
-                sw.WriteLine(string.Join(" ", Objects.Where(x => !so.Contains(x))));
-            }
-            else
-            {
-                sw.WriteLine(string.Join(" ", Subjects.ToList()));
-            }
         }
 
         public Triple[] Succ(INode s)
@@ -301,7 +255,6 @@ namespace k2extensionsLib
             }
         }
         Dictionary<INode, K2Tree> _T { get; set; }
-        bool _UseK2Triples { get; set; }
         int _K { get; set; }
 
         public INode[] Subjects { get; set; }
@@ -327,12 +280,10 @@ namespace k2extensionsLib
             Subjects = Array.Empty<INode>();
             Predicates = Array.Empty<INode>();
             Objects = Array.Empty<INode>();
-            _UseK2Triples = false;
         }
 
         public void Compress(TripleStore graph, bool useK2Triples)
         {
-            _UseK2Triples = useK2Triples;
             Subjects = graph.Triples.Select(x => x.Subject).Distinct().ToArray();
             Objects = graph.Triples.Select(x => x.Object).Distinct().ToArray();
             if (useK2Triples)
@@ -452,63 +403,6 @@ namespace k2extensionsLib
 
             Triple[] result = _FindNodes(p, path);
             return result;
-        }
-
-        public void Load(string filename)
-        {
-            using var sr = new StreamReader(filename);
-            string line = sr.ReadLine() ?? "";
-            var nf = new NodeFactory(new NodeFactoryOptions());
-            var l = new List<FlatPopcount>();
-            while (line != "Tree stop")
-            {
-                l.Add(new FlatPopcount());
-                l[^1].Store(line);
-                line = sr.ReadLine() ?? "";
-            }
-            line = sr.ReadLine() ?? "";
-            Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x)).ToArray();
-            foreach (var (pred, index) in Predicates.Select((v, i) => (v, i)))
-            {
-                //_T.Add(pred, l[index]);
-            }
-            if (_UseK2Triples)
-            {
-                line = sr.ReadLine() ?? "";
-                var so = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
-                line = sr.ReadLine() ?? "";
-                Subjects = so.Concat(line.Split(" ").Select(x => nf.CreateLiteralNode(x))).ToArray();
-                line = sr.ReadLine() ?? "";
-                Objects = so.Concat(line.Split(" ").Select(x => nf.CreateLiteralNode(x))).ToArray();
-            }
-            else
-            {
-                line = sr.ReadLine() ?? "";
-                Subjects = line.Split(" ").Select(x => nf.CreateLiteralNode(x)).ToArray();
-                Objects = Subjects;
-            }
-        }
-
-        public void Store(string filename)
-        {
-            using var sw = File.CreateText(filename);
-            foreach (var (k, v) in _T)
-            {
-                sw.WriteLine(v.T.GetDataAsString());
-            }
-            sw.WriteLine("Tree stop");
-            sw.WriteLine(string.Join(" ", Predicates.ToList()));
-            if (_UseK2Triples)
-            {
-                var so = Subjects.Intersect(Objects);
-                sw.WriteLine(string.Join(" ", so));
-                sw.WriteLine(string.Join(" ", Subjects.Where(x => !so.Contains(x))));
-                sw.WriteLine(string.Join(" ", Objects.Where(x => !so.Contains(x))));
-            }
-            else
-            {
-                sw.WriteLine(string.Join(" ", Subjects.ToList()));
-            }
         }
 
         private Triple[] _FindNodes(INode predicate, List<(int?, int?)> searchPath)

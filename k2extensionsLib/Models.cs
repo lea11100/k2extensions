@@ -532,11 +532,6 @@ namespace k2extensionsLib
         /// Store the tree structure in a given file. This also stores the information about the nodes in <see cref="Subjects"/>, <see cref="Objects"/> and <see cref="Predicates"/>.
         /// </summary>
         /// <param name="filename"></param>
-        void Store(string filename);
-        /// <summary>
-        /// Load a tree structure from a file
-        /// </summary>
-        void Load(string filename);
     }
 
     internal static class GeneralExtensions

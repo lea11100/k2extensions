@@ -13,7 +13,6 @@ namespace k2extensionsLib
 {
     public abstract class K2ArrayIndex : IK2Extension
     {
-        private bool _UseK2Triples { get; set; }
         int _Size
         {
             get
@@ -47,7 +46,6 @@ namespace k2extensionsLib
         public void Compress(TripleStore graph, bool useK2Triples)
         {
             var labels = new List<ulong>();
-            _UseK2Triples = useK2Triples;
             Subjects = graph.Triples.Select(x => x.Subject).Distinct().ToArray();
             Objects = graph.Triples.Select(x => x.Object).Distinct().ToArray();
             if (useK2Triples)
@@ -175,55 +173,6 @@ namespace k2extensionsLib
 
             Triple[] result = _FindNodesRec(0, path, p, new List<(int, int)>());
             return result;
-        }
-
-        public void Store(string filename)
-        {
-            using var sw = File.CreateText(filename);
-            sw.WriteLine(_RankUntilLeaves);
-            sw.WriteLine(_T.GetDataAsString());
-            sw.WriteLine(_Labels.GetDataAsString());
-            sw.WriteLine(string.Join(" ", Predicates.ToList()));
-            if (_UseK2Triples)
-            {
-                var so = Subjects.Intersect(Objects);
-                sw.WriteLine(string.Join(" ", so));
-                sw.WriteLine(string.Join(" ", Subjects.Where(x => !so.Contains(x))));
-                sw.WriteLine(string.Join(" ", Objects.Where(x => !so.Contains(x))));
-            }
-            else
-            {
-                sw.WriteLine(string.Join(" ", Subjects.ToList()));
-            }
-        }
-
-        public void Load(string filename)
-        {
-            using var sr = new StreamReader(filename);
-            string line = sr.ReadLine() ?? "";
-            var nf = new NodeFactory(new NodeFactoryOptions());
-            _RankUntilLeaves = int.Parse(line);
-            line = sr.ReadLine() ?? "";
-            _T.Store(line);
-            line = sr.ReadLine() ?? "";
-            _Labels.Store(line);
-            line = sr.ReadLine() ?? "";
-            Predicates = line.Split(" ").Select(x => nf.CreateLiteralNode(x)).ToArray();
-            if (_UseK2Triples)
-            {
-                line = sr.ReadLine() ?? "";
-                var so = line.Split(" ").Select(x => nf.CreateLiteralNode(x));
-                line = sr.ReadLine() ?? "";
-                Subjects = so.Concat(line.Split(" ").Select(x => nf.CreateLiteralNode(x))).ToArray();
-                line = sr.ReadLine() ?? "";
-                Objects = so.Concat(line.Split(" ").Select(x => nf.CreateLiteralNode(x))).ToArray();
-            }
-            else
-            {
-                line = sr.ReadLine() ?? "";
-                Subjects = line.Split(" ").Select(x => nf.CreateLiteralNode(x)).ToArray();
-                Objects = Subjects;
-            }
         }
 
         protected abstract void _BuildLabels(List<ulong> labels);

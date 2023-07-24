@@ -362,3 +362,5 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /k2extensions/TestData
+/k2extensions/TestData/btc2019-drugbank.ca_00001.nq.gz
+/k2extensions/TestData/btc2019-geonames.org_00001.nq.gz

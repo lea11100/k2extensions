@@ -51,13 +51,8 @@ namespace k2extensionsLib
             if (useK2Triples)
             {
                 var so = Subjects.Intersect(Objects);
-                Subjects = so.Concat(Subjects.Where(x => !so.Contains(x))).ToArray();
-                Objects = so.Concat(Objects.Where(x => !so.Contains(x))).ToArray();
-            }
-            else
-            {
-                Subjects = Subjects.Concat(Objects).Distinct().ToArray();
-                Objects = Subjects;
+                Subjects = so.Concat(Subjects.Except(so)).ToArray();
+                Objects = so.Concat(Objects.Except(so)).ToArray();
             }
             Predicates = graph.Triples.Select(x => x.Predicate).Distinct().ToArray();
 
@@ -187,11 +182,14 @@ namespace k2extensionsLib
         {
             var root = new TreeNode(_K * _K);
 
+            var subs = Subjects.Select((v, i) => (v, i)).ToDictionary(x => x.v, x => x.i);
+            var objs = Objects.Select((v, i) => (v, i)).ToDictionary(x => x.v, x => x.i);
+
             var paths = from t in g.Triples
                         group t by new
                         {
-                            s = Array.IndexOf(Subjects.ToArray(), t.Subject),
-                            o = Array.IndexOf(Objects.ToArray(), t.Object),
+                            s = subs[t.Subject],
+                            o = objs[t.Object],
                         } into subjObjGroup
                         select (Enumerable.Zip(subjObjGroup.Key.s.ToBase(_K, h), subjObjGroup.Key.o.ToBase(_K, h)), subjObjGroup.Select(x => x.Predicate));
 

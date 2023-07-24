@@ -61,13 +61,8 @@ namespace k2extensionsLib
             if (useK2Triples)
             {
                 var so = Subjects.Intersect(Objects);
-                Subjects = so.Concat(Subjects.Where(x => !so.Contains(x))).ToArray();
-                Objects = so.Concat(Objects.Where(x => !so.Contains(x))).ToArray();
-            }
-            else
-            {
-                Subjects = Subjects.Concat(Objects).Distinct().ToArray();
-                Objects = Subjects;
+                Subjects = so.Concat(Subjects.Except(so)).ToArray();
+                Objects = so.Concat(Objects.Except(so)).ToArray();
             }
             Predicates = graph.Triples.Select(x => x.Predicate).Distinct().ToArray();
 
@@ -79,8 +74,6 @@ namespace k2extensionsLib
                 N *= _K;
                 h++;
             }
-
-            var dict = graph.Triples.GroupBy(t => (t.Subject, t.Object), e => e.Predicate).ToDictionary(k => k.Key, n => n.ToArray());
 
             var root = _BuildK3(graph, h);
             var dynT = new List<DynamicBitArray>();
@@ -175,8 +168,12 @@ namespace k2extensionsLib
         {
             var root = new TreeNode(_K * _K * _K);
 
+            var subs = Subjects.Select((v, i) => (v, i)).ToDictionary(x => x.v, x => x.i);
+            var preds = Predicates.Select((v, i) => (v, i)).ToDictionary(x => x.v, x => x.i);
+            var objs = Objects.Select((v, i) => (v, i)).ToDictionary(x => x.v, x => x.i);
+
             var paths = from t in g.Triples
-                        select Enumerable.Zip(Array.IndexOf(Subjects.ToArray(), t.Subject).ToBase(_K, h), Array.IndexOf(Predicates.ToArray(), t.Predicate).ToBase(_K, h), Array.IndexOf(Objects.ToArray(), t.Object).ToBase(_K, h));
+                        select Enumerable.Zip(subs[t.Subject].ToBase(_K, h), preds[t.Predicate].ToBase(_K, h), objs[t.Object].ToBase(_K, h));
 
             foreach (IEnumerable<(int, int, int)> path in paths)
             {
@@ -289,14 +286,10 @@ namespace k2extensionsLib
             if (useK2Triples)
             {
                 var so = Subjects.Intersect(Objects);
-                Subjects = so.Concat(Subjects.Where(x => !so.Contains(x))).ToArray();
-                Objects = so.Concat(Objects.Where(x => !so.Contains(x))).ToArray();
+                Subjects = so.Concat(Subjects.Except(so)).ToArray();
+                Objects = so.Concat(Objects.Except(so)).ToArray();
             }
-            else
-            {
-                Subjects = Subjects.Concat(Objects).Distinct().ToArray();
-                Objects = Subjects;
-            }
+
             Predicates = graph.Triples.Select(x => x.Predicate).Distinct().ToArray();
 
             int size = Math.Max(Subjects.Length, Objects.Length);
@@ -307,12 +300,13 @@ namespace k2extensionsLib
                 N *= _K;
                 h++;
             }
-
+            var subs = Subjects.Select((v,i)=>(v,i)).ToDictionary(x=>x.v,x=>x.i);
+            var objs = Objects.Select((v,i)=>(v,i)).ToDictionary(x=>x.v,x=>x.i);
             foreach (var pred in Predicates)
             {
                 var treeForPred = new K2Tree(_K, Subjects.Length, Objects.Length);
                 var cells = from triple in graph.Triples.WithPredicate(pred)
-                            select (Array.IndexOf(Subjects.ToArray(), triple.Subject), Array.IndexOf(Objects.ToArray(), triple.Object));
+                            select (subs[triple.Subject], objs[triple.Object]);
 
                 treeForPred.Store(cells);
                 _T.Add(pred, treeForPred);

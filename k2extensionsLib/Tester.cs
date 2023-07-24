@@ -38,19 +38,22 @@ namespace k2extensionsLib
 
             var testTripels = new List<Triple>();
             var r = new Random();
-            var s = g.Triples.Select(x => x.Subject).Distinct();
-            var o = g.Triples.Select(x => x.Object).Distinct();
-            var p = g.Triples.Select(x => x.Predicate).Distinct();
-            for (int i = 0; i < 50; i++)
+            var s = g.Triples.Select(x => x.Subject).Distinct().ToArray();
+            var o = g.Triples.Select(x => x.Object).Distinct().ToArray();
+            var p = g.Triples.Select(x => x.Predicate).Distinct().ToArray();
+            int numberOfTripels = g.Triples.Count();
+            Triple[] triples = g.Triples.ToArray();
+            for (int i = 0; i < 1; i++)
             {
-                testTripels.Add(g.Triples.ElementAt(r.Next(g.Triples.Count())));
+                testTripels.Add(triples[r.Next(numberOfTripels)]);
             }
-            for (int i = 0; i < 150; i++)
+            int numberOfSubjects = s.Count(), numberOfPredicates = p.Count(), numberOfObjects = o.Count();
+            for (int i = 0; i < 1; i++)
             {
                 testTripels.Add(new Triple(
-                    s.ElementAt(r.Next(s.Count())),
-                    p.ElementAt(r.Next(p.Count())),
-                    o.ElementAt(r.Next(o.Count()))
+                    s[r.Next(numberOfSubjects)],
+                    p[r.Next(numberOfPredicates)],
+                    o[r.Next(numberOfObjects)]
                     ));
             }
             s = null; p = null; o = null;

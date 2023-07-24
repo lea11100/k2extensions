@@ -49,7 +49,7 @@ namespace k2extensionsLib
                 h++;
             }
             var root = new TreeNode(_K * _K);
-            var paths = from c in cells
+            var paths = from c in cells.ToArray()
                         select Enumerable.Zip(c.Item1.ToBase(_K, h), c.Item2.ToBase(_K, h));
 
             foreach (IEnumerable<(int, int)> path in paths)

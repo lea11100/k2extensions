@@ -16,7 +16,7 @@ using VDS.RDF;
 
 
 string[] files = new string[]{
-    "TestData//btc2019-lu.se_00001.nq.gz",
+    //"TestData//btc2019-lu.se_00001.nq.gz",
     "TestData//btc2019-uba.de_00001.nq.gz",
     "TestData//btc2019-drugbank.ca_00001.nq.gz",
     "TestData//btc2019-l3s.de_00001.nq.gz",   
@@ -27,7 +27,7 @@ foreach (string file in files)
 {
     try
     {
-        string result = Tester.TestExtensions(new List<IK2Extension>() { new K3(2), new MK2(2), new K2ArrayIndexPositional(2), new K2ArrayIndexK2(2) }, file, usek2Triples);
+        string result = Tester.TestExtensions(new List<IK2Extension>() { new MK2(2), new K3(2), new K2ArrayIndexPositional(2), new K2ArrayIndexK2(2) }, file, usek2Triples);
         Tester.PrintCSVTable(result);
     }
     catch { }

@@ -12,26 +12,23 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="TestData\about.rdf">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Update="TestData\btc2019-acropolis.org.uk_00001.nq.gz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="TestData\dbpedia.nt">
+    <None Update="TestData\btc2019-drugbank.ca_00001.nq.gz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="TestData\ontology--DEV_type=parsed_sorted.nt">
+    <None Update="TestData\btc2019-geonames.org_00001.nq.gz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="TestData\ontology.rdf">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Update="TestData\search.xml">
+    <None Update="TestData\btc2019-l3s.de_00001.nq.gz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="TestData\test.rdf">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    <None Update="TestData\btc2019-lu.se_00001.nq.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="TestData\btc2019-uba.de_00001.nq.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 

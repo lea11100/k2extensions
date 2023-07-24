@@ -22,7 +22,7 @@ namespace k2extensionsLib
         }
         protected virtual FlatPopcount _Labels { get; set; } = new();
         protected int _RankUntilLeaves { get; set; }
-        protected FlatPopcount _T { get; set; } = new ();
+        protected FlatPopcount _T { get; set; } = new();
         protected int _K { get; set; }
 
         public INode[] Subjects { get; set; } = Array.Empty<INode>();
@@ -92,7 +92,7 @@ namespace k2extensionsLib
             int startLeaves = (n.data.Count - 1) * 64 + n.lastUsedIndex + 1;
             n.AddRange(levels.Last());
             _T = new FlatPopcount(n);
-            _RankUntilLeaves = _T.Rank1(startLeaves);
+            _RankUntilLeaves = _T.Rank1(startLeaves-1);
         }
 
         public Triple[] AllEdgesOfType(INode p)
@@ -137,7 +137,7 @@ namespace k2extensionsLib
                                        where subj.i == obj.i
                                        select ((int?)subj.v, (int?)obj.v)).ToList();
 
-            var result = _FindNodesRec(0, path, p, new List<(int, int)>());
+            var result = _FindNodesRec(0, path, Array.IndexOf(Predicates.ToArray(),p), new List<(int, int)>());
             return result;
         }
 
@@ -153,7 +153,7 @@ namespace k2extensionsLib
         {
             List<(int?, int?)> path = (from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
                                        select ((int?)null, (int?)obj.v)).ToList();
-            Triple[] result = _FindNodesRec(0, path, p, new List<(int, int)>());
+            Triple[] result = _FindNodesRec(0, path, Array.IndexOf(Predicates.ToArray(), p), new List<(int, int)>());
             return result;
         }
 
@@ -171,13 +171,15 @@ namespace k2extensionsLib
             List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
                                        select ((int?)subj.v, (int?)null)).ToList();
 
-            Triple[] result = _FindNodesRec(0, path, p, new List<(int, int)>());
+            Triple[] result = _FindNodesRec(0, path, Array.IndexOf(Predicates.ToArray(), p), new List<(int, int)>());
             return result;
         }
 
         protected abstract void _BuildLabels(List<ulong> labels);
 
-        protected abstract INode[] _GetLabelFromLeafPosition(int position);
+        protected abstract INode[] _GetPredicatesFromLeafPosition(int position);
+
+        protected abstract bool _PositionHasPredicate(int rankInLeaves, int predicate);
 
         protected abstract List<int> _GetNodesWithType(int positionOfType);
 
@@ -264,7 +266,7 @@ namespace k2extensionsLib
             return new Tuple<int, int>(row, col);
         }
 
-        private Triple[] _FindNodesRec(int positionInNodes, List<(int?, int?)> searchPath, INode? predicate, List<(int, int)> parentPath)
+        private Triple[] _FindNodesRec(int positionInNodes, List<(int?, int?)> searchPath, int? predicate, List<(int, int)> parentPath)
         {
             var result = new List<Triple>();
             (int?, int?) position = searchPath[0];
@@ -281,9 +283,15 @@ namespace k2extensionsLib
                         int posS = parent.Select(x => x.Item1).FromBase(_K);
                         int posO = parent.Select(x => x.Item2).FromBase(_K);
                         int rankInLeaves = _T.Rank1(pos) - 1 - _RankUntilLeaves;
-                        INode[] preds = _GetLabelFromLeafPosition(rankInLeaves);
-                        if (predicate != null) preds = preds.Where(x => x.Equals(predicate)).ToArray();
-                        if (preds.Length != 0) result.AddRange(preds.Select(x => new Triple(Subjects.ElementAt(posS), x, Objects.ElementAt(posO))));
+                        if (predicate == null)
+                        {
+                            INode[] preds = _GetPredicatesFromLeafPosition(rankInLeaves);
+                            if (preds.Length != 0) result.AddRange(preds.Select(x => new Triple(Subjects.ElementAt(posS), x, Objects.ElementAt(posO))));
+                        }
+                        else if (_PositionHasPredicate(rankInLeaves, predicate.Value))
+                        {
+                            result.Add(new Triple(Subjects.ElementAt(posS), Predicates[predicate.Value], Objects.ElementAt(posO)));
+                        }
                     }
                     else if (_T[pos])
                     {
@@ -310,11 +318,20 @@ namespace k2extensionsLib
             _Labels = new FlatPopcount(dynamicLabels);
         }
 
-        protected override INode[] _GetLabelFromLeafPosition(int position)
+        protected override INode[] _GetPredicatesFromLeafPosition(int position)
         {
             ulong[] l = _Labels[(Predicates.Length * position)..(Predicates.Length * position + Predicates.Length)];
             var result = _GetPredicatesFromBitStream(l);
             return result.ToArray();
+        }
+
+        protected override bool _PositionHasPredicate(int position, int predicate)
+        {
+            ulong[] labels = _Labels[(Predicates.Length * position)..(Predicates.Length * position + Predicates.Length)];
+            ulong l = labels[predicate / 64];
+            predicate %= 64;
+            ulong mask = 1UL << (63 - predicate);
+            return (l & mask) != 0;
         }
 
         protected override List<int> _GetNodesWithType(int positionOfType)
@@ -356,7 +373,7 @@ namespace k2extensionsLib
 
     public class K2ArrayIndexK2 : K2ArrayIndex
     {
-        private K2Tree _LabelTree { get; set; } = new(0,0,0);
+        private K2Tree _LabelTree { get; set; } = new(0, 0, 0);
         protected override FlatPopcount _Labels { get => _LabelTree.T; set => _LabelTree.T = value; }
 
         public K2ArrayIndexK2(int k) : base(k) { }
@@ -368,14 +385,25 @@ namespace k2extensionsLib
             _LabelTree.Store(cells);
         }
 
-        protected override INode[] _GetLabelFromLeafPosition(int position)
+        protected override INode[] _GetPredicatesFromLeafPosition(int position)
         {
-            List<(int?, int?)> path = (from p in position.ToBase(_K, _LabelTree._Size.ToBase(_K).Length)                                     
+            List<(int?, int?)> path = (from p in position.ToBase(_K, _LabelTree._Size.ToBase(_K).Length)
                                        select ((int?)p, (int?)null)).ToList();
 
             var cells = _LabelTree.FindNodes(0, path, new List<(int, int)>());
             var result = cells.Select(x => Predicates[x.Item2]);
             return result.ToArray();
+        }
+
+        protected override bool _PositionHasPredicate(int position, int predicate)
+        {
+            List<(int?, int?)> path = (from pos in position.ToBase(_K, _LabelTree._Size.ToBase(_K).Length).Select((v, i) => (v, i))
+                                       from pred in predicate.ToBase(_K, _LabelTree._Size.ToBase(_K).Length).Select((v, i) => (v, i))
+                                       where pos.i == pred.i
+                                       select ((int?)pos.v, (int?)pred.v)).ToList();
+            var cells = _LabelTree.FindNodes(0, path, new List<(int, int)>());
+            return cells.Length != 0;
+
         }
 
         protected override List<int> _GetNodesWithType(int positionOfType)

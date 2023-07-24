@@ -15,14 +15,24 @@ using VDS.RDF;
 //var t3 = b3.ToByteArray();
 
 
-string fileName = args.Length==1 ? args[0] : "TestData//btc2019-acropolis.org.uk_00001.nq.gz";
-//string fileName = args.Length==1 ? args[0] : "TestData//ontology.rdf";
-bool usek2Triples = args.Length == 2 && bool.Parse(args[1]);
+string[] files = new string[]{
+    "TestData//btc2019-lu.se_00001.nq.gz",
+    "TestData//btc2019-uba.de_00001.nq.gz",
+    "TestData//btc2019-drugbank.ca_00001.nq.gz",
+    "TestData//btc2019-l3s.de_00001.nq.gz",   
+};
+bool usek2Triples = true;
 
-string result = Tester.TestExtensions(new List<IK2Extension>() { new K3(2), new K2ArrayIndexPositional(2), new K2ArrayIndexK2(2), new MK2(2), }, fileName, usek2Triples);
-//string result = Tester.TestExtensions(new List<IK2Extension>() { new K3(2)}, fileName, usek2Triples);
+foreach (string file in files)
+{
+    try
+    {
+        string result = Tester.TestExtensions(new List<IK2Extension>() { new K3(2), new MK2(2), new K2ArrayIndexPositional(2), new K2ArrayIndexK2(2) }, file, usek2Triples);
+        Tester.PrintCSVTable(result);
+    }
+    catch { }
+}
 
-Tester.PrintCSVTable(result);
-
+Console.ReadKey();
 
 

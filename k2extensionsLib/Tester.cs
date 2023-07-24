@@ -21,7 +21,7 @@ namespace k2extensionsLib
     {
         public static string TestExtensions(List<IK2Extension> extensionsUnderTest, string fileName, bool useK2Triples)
         {
-            Console.WriteLine("Started");
+            Console.WriteLine("Start testing: " + fileName);
             //IGraph g = new Graph();
             //g.LoadFromFile(fileName);
             TripleStore g = new ();

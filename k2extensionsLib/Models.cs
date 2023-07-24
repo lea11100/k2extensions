@@ -166,7 +166,7 @@ namespace k2extensionsLib
 
         public void AddRange(uint array, int length)
         {
-            AddRange(((ulong)array)<<32, length);
+            AddRange(((ulong)array) << 32, length);
         }
 
         public void AddRange(ulong array, int length)
@@ -204,7 +204,7 @@ namespace k2extensionsLib
             {
                 res += Convert.ToString((long)d, 2).PadLeft(64, '0');
             }
-            res += Convert.ToString((long)data[^1], 2).PadLeft(64, '0')[..(lastUsedIndex+1)];
+            res += Convert.ToString((long)data[^1], 2).PadLeft(64, '0')[..(lastUsedIndex + 1)];
             return res;
         }
     }
@@ -253,56 +253,40 @@ namespace k2extensionsLib
             return _Data.Length * 64;
         }
 
-        internal void Store(string array)
-        {
-            _Data = new ulong[(int)Math.Ceiling(((double)array.Length) / 4)];
-            _L1L2Index = new UInt128[(int)Math.Ceiling((double)_Data.Length / 64)];
-            var chunkedArray = array.Chunk(4);
-            for (int i = 0; i < chunkedArray.Count(); i++)
-            {
-                char[] chunk = chunkedArray.ElementAt(i);
-                ulong d = 0;
-                for (int j = 0; j < 4; j++)
-                {
-                    int c = chunk[j];
-                    d += (ulong)c;
-                    d <<= 16;
-                }
-                _Data[i] = d;
-            }
-            Init();
-        }
-
         private void Init()
         {
-            long numberOfOnesBeforeL1 = 0;
+            ulong l1Index = 0;
             var sampels = new List<long>() { 0 };
-            int index = 0;
-            if(_Data.Length % 64 != 0)
-            {
-                _Data = _Data.Concat(Enumerable.Repeat(0UL, 64 - _Data.Length % 64)).ToArray();
-            }
+            int i = 0;
             foreach (var l1 in _Data.Chunk(64))
             {
-                int numberOfOnesBeforeL2 = 0;
-                int[] numberOfOnesBeforeEachL2 = new int[8];
-                int indexForL2 = 0;
+                _L1L2Index[i] = ((UInt128)l1Index)<<84;
+                uint l2Index = 0;
+                int j = 0;
                 foreach (var l2 in l1.Chunk(8))
                 {
-                    numberOfOnesBeforeEachL2[indexForL2] = numberOfOnesBeforeL2;
-                    var temp = l2.Select(BitOperations.PopCount).Sum();
-                    if ((numberOfOnesBeforeL2 + numberOfOnesBeforeL1) >>> 13 != (numberOfOnesBeforeL2 + temp + numberOfOnesBeforeL1) >>> 13)
+                    uint onesInL2 = (uint)l2.Select(BitOperations.PopCount).Sum();
+                    if (j < 7)
                     {
-                        long remainingOnes = ((((numberOfOnesBeforeL2 + numberOfOnesBeforeL1) >>> 13) + 1) << 13) - (numberOfOnesBeforeL2 + numberOfOnesBeforeL1);
-                        int relativePosition = Select1In512(l2, (int)remainingOnes);
-                        sampels.Add(index * 4096 + indexForL2 * 512 + relativePosition);
+                        _L1L2Index[i] += (UInt128)(l2Index + onesInL2) << ((6 - j) * 12);
                     }
-                    numberOfOnesBeforeL2 += temp;
-                    indexForL2++;
+                    if ((l2Index + l1Index) >>> 13 != (l2Index + onesInL2 + l1Index) >>> 13)
+                    {
+                        ulong remainingOnes = ((((l2Index + l1Index) >>> 13) + 1) << 13) - (l2Index + l1Index);
+                        int relativePosition = Select1In512(l2, (int)remainingOnes);
+                        sampels.Add(i * 4096 + j * 512 + relativePosition);
+                    }
+                    l2Index += onesInL2;
+                    j++;
                 }
-                _L1L2Index[index] = _InitL1L2(numberOfOnesBeforeL1, numberOfOnesBeforeEachL2.Skip(1).ToArray());
-                numberOfOnesBeforeL1 += numberOfOnesBeforeL2;
-                index++;
+                while(j < 7)
+                {
+                    _L1L2Index[i] += ((UInt128)l2Index) << ((6 - j) * 12);
+                    j++;
+                }
+                //_L1L2Index[i] = _InitL1L2(l1Index, l2Indices.SkipLast(1).ToArray());
+                l1Index += l2Index;
+                i++;
             }
             _SampelsOfOnePositions = sampels.ToArray();
         }
@@ -328,19 +312,6 @@ namespace k2extensionsLib
             throw new Exception();
         }
 
-        private static UInt128 _InitL1L2(long onesBeforeL1, int[] onesInL2)
-        {
-            UInt128 result = 0;
-            result += (UInt128)onesBeforeL1 << 84; //Get size of 44 Bit and shift to front;
-            var index = 0;
-            foreach (var l2 in onesInL2.Reverse())
-            {
-                result += (UInt128)l2 << index; //Get size of 12 and shift to position
-                index += 12;
-            }
-            return result;
-        }
-
         internal bool this[int key]
         {
             get
@@ -360,7 +331,7 @@ namespace k2extensionsLib
                 int startPosition = range.Start.Value % 64;
                 int endBlock = range.End.Value / 64;
                 int endPosition = range.End.Value % 64;
-                ulong[] result = _Data[startBlock..(endBlock + 1)];
+                ulong[] result = endPosition == 0 ? _Data[startBlock..endBlock].Append(0UL).ToArray() : _Data[startBlock..(endBlock + 1)];
                 if (startPosition != 0)
                 {
                     for (int i = 0; i < result.Length - 1; i++)
@@ -417,7 +388,9 @@ namespace k2extensionsLib
             remainingOnes -= blocks[l2];
 
             //Get position in L2-Block
-            position += Select1In512(_Data[(l1 * 64 + l2 * 8)..].Take(8).ToArray(), remainingOnes);
+            var l2Block = _Data[(l1 * 64 + l2 * 8)..];
+            l2Block = l2Block.Take(Math.Min(8, l2Block.Length)).ToArray();
+            position += Select1In512(l2Block, remainingOnes);
             return position;
         }
 
@@ -432,20 +405,15 @@ namespace k2extensionsLib
         /// <param name="position"></param>
         /// <param name="start"></param>
         /// <returns></returns>
-        internal int Rank1(int position, int start = 0)
+        internal int Rank1(int position)
         {
-            int ignoredOnes = 0;
-            if (start != 0)
-            {
-                ignoredOnes = Rank1(start - 1);
-            }
             int block = position / 64;
             int l1 = block / 64;
             int l2 = block % 64 / 8;
             int l3 = block % 8;
             int relativePositionInL3 = position % 64;
             int result = getRankByBlocks(l1, l2, l3, relativePositionInL3);
-            return result - ignoredOnes;
+            return result;
         }
 
         private int getRankByBlocks(int l1, int l2, int l3, int relativePositionInL3)

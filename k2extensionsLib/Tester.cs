@@ -43,12 +43,12 @@ namespace k2extensionsLib
             var p = g.Triples.Select(x => x.Predicate).Distinct().ToArray();
             int numberOfTripels = g.Triples.Count();
             Triple[] triples = g.Triples.ToArray();
-            for (int i = 0; i < 1; i++)
+            for (int i = 0; i < 50; i++)
             {
                 testTripels.Add(triples[r.Next(numberOfTripels)]);
             }
-            int numberOfSubjects = s.Count(), numberOfPredicates = p.Count(), numberOfObjects = o.Count();
-            for (int i = 0; i < 1; i++)
+            int numberOfSubjects = s.Length, numberOfPredicates = p.Length, numberOfObjects = o.Length;
+            for (int i = 0; i < 150; i++)
             {
                 testTripels.Add(new Triple(
                     s[r.Next(numberOfSubjects)],

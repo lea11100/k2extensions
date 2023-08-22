@@ -1,36 +1,33 @@
 ﻿// See https://aka.ms/new-console-template for more information
 using k2extensionsLib;
-using Lucene.Net.Util;
-using System.Drawing.Text;
-using System.Numerics;
-using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
-using VDS.RDF;
 
-//BigInteger b = new BigInteger(new byte[] { 255, 0, 123, 0, 123, 0 });
-//BigInteger b2 = new BigInteger(528289038591);
-//BigInteger b3 = new BigInteger(280377528711936);
-//var t = b.ToByteArray();
-//var t2 = b2.ToByteArray();
-//var t3 = b3.ToByteArray();
+
 
 
 string[] files = new string[]{
-    //"TestData//btc2019-lu.se_00001.nq.gz",
+    "TestData//btc2019-lu.se_00001.nq.gz",
+    //"TestData//btc2019-drugbank.ca_00001.nq.gz",
+    //"TestData//btc2019-ordnancesurvey.co.uk_00001.nq.gz",
     "TestData//btc2019-uba.de_00001.nq.gz",
-    "TestData//btc2019-drugbank.ca_00001.nq.gz",
-    "TestData//btc2019-l3s.de_00001.nq.gz",   
+    "TestData//btc2019-l3s.de_00001.nq.gz",
 };
-bool usek2Triples = true;
+bool usek2Triples = false;
+int k = 2;
+string outFile = "result.csv";
 
-foreach (string file in files)
-{
-    try
+
+using (var fs = new StreamWriter(outFile, false)) {
+
+    foreach (string file in files)
     {
-        string result = Tester.TestExtensions(new List<IK2Extension>() { new MK2(2), new K3(2), new K2ArrayIndexPositional(2), new K2ArrayIndexK2(2) }, file, usek2Triples);
-        Tester.PrintCSVTable(result);
+        try
+        {
+            string result = Tester.TestExtensions(new List<IK2Extension>() { new MK2(k), new K3(k), new LeafRankV1(k), new LeafRankK2(k) }, file, usek2Triples);
+            fs.Write(result);
+            Tester.PrintCSVTable(result);
+        }
+        catch (Exception e) { Console.WriteLine(e.Message + "\r\n" + e.StackTrace); }
     }
-    catch { }
 }
 
 Console.ReadKey();

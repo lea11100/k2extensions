@@ -9,6 +9,7 @@ using NUnit.Framework;
 using System.Reflection.Emit;
 using System.Security.Cryptography;
 using System.Numerics;
+using System;
 
 namespace k2extensionsLib
 {
@@ -93,11 +94,10 @@ namespace k2extensionsLib
 
         public Triple[] Connections(INode s, INode o)
         {
-            List<(int?, int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                             from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                             where subj.i == obj.i
-                                             select ((int?)subj.v, (int?)null, (int?)obj.v)).ToList();
-
+            List<(int?,int?, int?)> path = Enumerable.Zip(
+                Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>(), 
+                Enumerable.Repeat((int?)null, _Size.ToBase(_K).Length), 
+                Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>()).ToList();
 
             Triple[] result = _FindNodesRec(0, path, new List<(int, int, int)>());
             return result;
@@ -113,11 +113,12 @@ namespace k2extensionsLib
 
         public Triple[] Exists(INode s, INode p, INode o)
         {
-            List<(int?, int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                             from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                             from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                             where subj.i == obj.i && obj.i == pred.i
-                                             select ((int?)subj.v, (int?)pred.v, (int?)obj.v)).ToList();
+            List<(int?, int?, int?)> path = Enumerable.Zip(
+                Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>(),
+                Array.IndexOf(Predicates.ToArray(), p).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>(), 
+                Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>())
+                .ToList();
+
             Triple[] result = _FindNodesRec(0, path, new List<(int, int, int)>());
             return result;
         }
@@ -134,10 +135,11 @@ namespace k2extensionsLib
 
         public Triple[] PrecOfType(INode o, INode p)
         {
-            List<(int?, int?, int?)> path = (from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                             from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                             where pred.i == obj.i
-                                             select ((int?)null, (int?)pred.v, (int?)obj.v)).ToList();
+            List<(int?, int?, int?)> path = Enumerable.Zip(
+                Enumerable.Repeat((int?)null, _Size.ToBase(_K).Length),
+                Array.IndexOf(Predicates.ToArray(), p).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>(),
+                Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>())
+                .ToList();
 
 
             Triple[] result = _FindNodesRec(0, path, new List<(int, int, int)>());
@@ -155,10 +157,11 @@ namespace k2extensionsLib
         public Triple[] SuccOfType(INode s, INode p)
         {
 
-            List<(int?, int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                             from pred in Array.IndexOf(Predicates.ToArray(), p).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                             where pred.i == subj.i
-                                             select ((int?)subj.v, (int?)pred.v, (int?)null)).ToList();
+            List<(int?, int?, int?)> path = Enumerable.Zip(
+                Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>(),
+                Array.IndexOf(Predicates.ToArray(), p).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>(),
+                Enumerable.Repeat((int?)null, _Size.ToBase(_K).Length))
+                .ToList();
 
             Triple[] result = _FindNodesRec(0, path, new List<(int, int, int)>());
             return result;
@@ -323,10 +326,7 @@ namespace k2extensionsLib
 
         public Triple[] Connections(INode s, INode o)
         {
-            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                       from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                       where subj.i == obj.i
-                                       select ((int?)subj.v, (int?)obj.v)).ToList();
+            List<(int?, int?)> path = Enumerable.Zip(Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>(), Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>()).ToList();
             var result = new List<Triple>();
             foreach (var p in Predicates)
             {
@@ -349,10 +349,7 @@ namespace k2extensionsLib
 
         public Triple[] Exists(INode s, INode p, INode o)
         {
-            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                       from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                       where subj.i == obj.i
-                                       select ((int?)subj.v, (int?)obj.v)).ToList();
+            List<(int?, int?)> path = Enumerable.Zip(Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>(), Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>()).ToList();
             Triple[] result = _FindNodes(p, path);
             return result;
         }

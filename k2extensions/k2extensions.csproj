@@ -27,6 +27,9 @@
     <None Update="TestData\btc2019-lu.se_00001.nq.gz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="TestData\btc2019-ordnancesurvey.co.uk_00001.nq.gz">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="TestData\btc2019-uba.de_00001.nq.gz">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

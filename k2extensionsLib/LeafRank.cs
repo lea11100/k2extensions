@@ -1,4 +1,5 @@
 ﻿using ICSharpCode.SharpZipLib.Zip;
+using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -11,7 +12,7 @@ using VDS.RDF.Shacl.Validation;
 
 namespace k2extensionsLib
 {
-    public abstract class K2ArrayIndex : IK2Extension
+    public abstract class LeafRank : IK2Extension
     {
         int _Size
         {
@@ -38,7 +39,7 @@ namespace k2extensionsLib
             }
         }
 
-        public K2ArrayIndex(int k)
+        public LeafRank(int k)
         {
             _K = k;
         }
@@ -92,27 +93,31 @@ namespace k2extensionsLib
 
         public Triple[] AllEdgesOfType(INode p)
         {
+            //buttom-up approach
             var result = new List<Triple>();
             int positionInTypes = Array.IndexOf(Predicates, p);
             List<int> nodesWithType = _GetNodesWithType(positionInTypes);
+            List<(long, int, int)> cellStore = new();
             foreach (var n in nodesWithType)
             {
                 //long positionInNodes = _StartLeaves + n * Predicates.Count();
                 long positionInNodes = _T.Select1(_RankUntilLeaves + n + 1);
-                Tuple<int, int> cell = _GetCell(positionInNodes);
+                Tuple<int, int> cell = _GetCell(positionInNodes, ref cellStore);
                 var r = new Triple(Subjects.ElementAt(cell.Item1), Predicates[positionInTypes], Objects.ElementAt(cell.Item2));
                 result.Add(r);
             }
             return result.ToArray();
+
+            //top-down approach:
+            //(int?, int?)[] path = new (int?, int?)[_Size.ToBase(_K).Length];
+            //Array.Fill(path, (null, null));
+            //Triple[] result = _FindNodesRec(0, path.ToList(), Array.IndexOf(Predicates, p), new List<(int, int)>());
+            //return result;
         }
 
         public Triple[] Connections(INode s, INode o)
         {
-            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                       from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                       where subj.i == obj.i
-                                       select ((int?)subj.v, (int?)obj.v)).ToList();
-
+            List<(int?, int?)> path = Enumerable.Zip(Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>(), Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>()).ToList();
             var result = _FindNodesRec(0, path, null, new List<(int, int)>());
             return result;
         }
@@ -127,11 +132,7 @@ namespace k2extensionsLib
 
         public Triple[] Exists(INode s, INode p, INode o)
         {
-            List<(int?, int?)> path = (from subj in Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                       from obj in Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                       where subj.i == obj.i
-                                       select ((int?)subj.v, (int?)obj.v)).ToList();
-
+            List<(int?, int?)> path = Enumerable.Zip(Array.IndexOf(Subjects.ToArray(), s).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>(), Array.IndexOf(Objects.ToArray(), o).ToBase(_K, _Size.ToBase(_K).Length).Cast<int?>()).ToList();
             var result = _FindNodesRec(0, path, Array.IndexOf(Predicates.ToArray(),p), new List<(int, int)>());
             return result;
         }
@@ -242,25 +243,52 @@ namespace k2extensionsLib
         /// </summary>
         /// <param name="position"></param>
         /// <returns></returns>
-        private Tuple<int, int> _GetCell(long position)
+        private Tuple<int, int> _GetCell(long position, ref List<(long,int,int)> cellStore)
         {
             int power = 1;
             int col = 0;
             int row = 0;
+            List<(long,int,int)> parent = new();
+            int h = 1;
             while (position > 0)
             {
+                
                 int submatrixPos = (int)position % (_K * _K);
                 int submatrixColumn = submatrixPos % _K;
                 int submatrixRow = submatrixPos / _K;
+                if (cellStore.Count - h > 0 && cellStore[^h].Item1 == position)
+                {
+                    row += cellStore[^h].Item2;
+                    col += cellStore[^h].Item3;
+                    parent.Add((position, cellStore[^h].Item2, cellStore[^h].Item3));
+                    break;
+                }
+                else
+                {
+                    parent.Add((position, submatrixRow * power, submatrixColumn * power));
+                }
                 col += submatrixColumn * power;
-                row += submatrixRow * power;
+                row += submatrixRow * power;            
                 int numberOf1Bits = (int)position / (_K * _K);
                 if (numberOf1Bits == 0)
                     position = 0;
                 else
                     position = _T.Select1(numberOf1Bits);
                 power *= _K;
+                h++;
             }
+            int sum_row = 0;
+            int sum_col = 0;
+            parent.Reverse();
+            List<(long, int, int)> path = new();
+            for (int i = 0; i< parent.Count; i++)
+            {
+                var p = parent[i];
+                sum_row += p.Item2;
+                sum_col += p.Item3;
+                path.Add((p.Item1, sum_row, sum_col));
+            }
+            cellStore = cellStore.Take(cellStore.Count - h).Concat(path).ToList();
             return new Tuple<int, int>(row, col);
         }
 
@@ -302,9 +330,9 @@ namespace k2extensionsLib
         }
     }
 
-    public class K2ArrayIndexPositional : K2ArrayIndex
+    public class LeafRankV1 : LeafRank
     {
-        public K2ArrayIndexPositional(int k) : base(k) { }
+        public LeafRankV1(int k) : base(k) { }
 
         protected override void _BuildLabels(List<ulong> labels)
         {
@@ -326,10 +354,7 @@ namespace k2extensionsLib
         protected override bool _PositionHasPredicate(int position, int predicate)
         {
             ulong[] labels = _Labels[(Predicates.Length * position)..(Predicates.Length * position + Predicates.Length)];
-            ulong l = labels[predicate / 64];
-            predicate %= 64;
-            ulong mask = 1UL << (63 - predicate);
-            return (l & mask) != 0;
+            return (labels[0] & (1UL << (63 - predicate))) != 0;
         }
 
         protected override List<int> _GetNodesWithType(int positionOfType)
@@ -369,12 +394,12 @@ namespace k2extensionsLib
         }
     }
 
-    public class K2ArrayIndexK2 : K2ArrayIndex
+    public class LeafRankK2 : LeafRank
     {
         private K2Tree _LabelTree { get; set; } = new(0, 0, 0);
         protected override FlatPopcount _Labels { get => _LabelTree.T; set => _LabelTree.T = value; }
 
-        public K2ArrayIndexK2(int k) : base(k) { }
+        public LeafRankK2(int k) : base(k) { }
 
         protected override void _BuildLabels(List<ulong> labels)
         {
@@ -395,10 +420,8 @@ namespace k2extensionsLib
 
         protected override bool _PositionHasPredicate(int position, int predicate)
         {
-            List<(int?, int?)> path = (from pos in position.ToBase(_K, _LabelTree._Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                       from pred in predicate.ToBase(_K, _LabelTree._Size.ToBase(_K).Length).Select((v, i) => (v, i))
-                                       where pos.i == pred.i
-                                       select ((int?)pos.v, (int?)pred.v)).ToList();
+            List<(int?, int?)> path = Enumerable.Zip(position.ToBase(_K, _LabelTree._Size.ToBase(_K).Length).Cast<int?>(), predicate.ToBase(_K, _LabelTree._Size.ToBase(_K).Length).Cast<int?>()).ToList();
+
             var cells = _LabelTree.FindNodes(0, path, new List<(int, int)>());
             return cells.Length != 0;
 

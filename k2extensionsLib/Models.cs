@@ -196,17 +196,6 @@ namespace k2extensionsLib
             }
             AddRange(array.data[^1], array.lastUsedIndex + 1);
         }
-
-        public string GetAsString()
-        {
-            var res = "";
-            foreach (ulong d in data.Take(data.Count - 1))
-            {
-                res += Convert.ToString((long)d, 2).PadLeft(64, '0');
-            }
-            res += Convert.ToString((long)data[^1], 2).PadLeft(64, '0')[..(lastUsedIndex + 1)];
-            return res;
-        }
     }
 
     public class FlatPopcount
@@ -231,23 +220,7 @@ namespace k2extensionsLib
             _SampelsOfOnePositions = Array.Empty<long>();
             Init();
         }
-
-        internal string GetDataAsString()
-        {
-            var result = string.Join("", _Data.Select(x => x.ToChars()));
-            return result;
-        }
-
-        internal string GetAsBitstream()
-        {
-            var res = "";
-            foreach (ulong d in _Data)
-            {
-                res += Convert.ToString((long)d, 2).PadLeft(64, '0');
-            }
-            return res;
-        }
-
+      
         internal int Length()
         {
             return _Data.Length * 64;
@@ -321,7 +294,7 @@ namespace k2extensionsLib
                 var bit = (_Data[block] & ((ulong)1 << 63 - position)) != 0;
                 return bit;
             }
-        }
+        }        
 
         internal ulong[] this[Range range]
         {
@@ -373,9 +346,8 @@ namespace k2extensionsLib
             byte[] bytes = BitConverter.GetBytes((ulong)(_L1L2Index[l1] >>> 64)).Reverse().Concat(BitConverter.GetBytes((ulong)_L1L2Index[l1]).Reverse()).ToArray(); //"Reverse()" to convert to big endian
             Vector128<byte> v = Vector128.Create(bytes);
             //Positions:    00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15
-            //Shuffeled:    05 06 07 08 08 09 10 11 11 12 13 14 14 15 -1 -1
-            //To big endian:06 05 08 07 09 08 11 10 12 11 14 13 15 14 -1 -1
-            //Vector128<byte> shuffle_mask = Vector128.Create(1,2,15,0,14,15,12,13,11,12,9,10,8,9,-1,-1).AsByte();
+            //Shuffeled:    -1 -1 05 06 07 08 08 09 10 11 11 12 13 14 14 15
+            //To big endian:-1 -1 06 05 08 07 09 08 11 10 12 11 14 13 15 14
             Vector128<byte> shuffle_mask = Vector128.Create(-1, -1, 06, 05, 08, 07, 09, 08, 11, 10, 12, 11, 14, 13, 15, 14).AsByte();
             Vector128<byte> v_shuffeled = Ssse3.Shuffle(v.AsByte(), shuffle_mask);
             Vector128<ushort> upper = Sse2.And(v_shuffeled.AsUInt16(), Vector128.Create((ushort)0b111111111111));
@@ -388,8 +360,7 @@ namespace k2extensionsLib
             remainingOnes -= blocks[l2];
 
             //Get position in L2-Block
-            var l2Block = _Data[(l1 * 64 + l2 * 8)..];
-            l2Block = l2Block.Take(Math.Min(8, l2Block.Length)).ToArray();
+            var l2Block = _Data.Skip(l1 * 64 + l2 * 8).Take(8).ToArray();
             position += Select1In512(l2Block, remainingOnes);
             return position;
         }
@@ -399,12 +370,6 @@ namespace k2extensionsLib
             return (int)(_L1L2Index[position] >>> 84);
         }
 
-        /// <summary>
-        /// Rank implementation including the index and the start, if given
-        /// </summary>
-        /// <param name="position"></param>
-        /// <param name="start"></param>
-        /// <returns></returns>
         internal int Rank1(int position)
         {
             int block = position / 64;
@@ -504,42 +469,6 @@ namespace k2extensionsLib
 
     internal static class GeneralExtensions
     {
-        internal static string ToBinaryString(this UInt128 number)
-        {
-            ulong part1 = (ulong)(number >>> 64);
-            ulong part2 = (ulong)(number << 64 >>> 64);
-            string s = Convert.ToString((long)part1, 2).PadLeft(64, '0') + Convert.ToString((long)part2, 2).PadLeft(64, '0');
-            return s;
-        }
-
-        internal static char[] ToChars(this ulong value)
-        {
-            ulong extractor = (ulong)short.MaxValue;
-            var result = new char[4];
-            for (int i = 0; i < 4; i++)
-            {
-                int c = (int)((value & extractor) >>> (i * 16));
-                result[^(i + 1)] = (char)c;
-                extractor <<= 16;
-            }
-            return result;
-        }
-
-        internal static int rank1(this BitArray array, int index)
-        {
-            int result = array.Cast<bool>().Take(index + 1).Count(x => x);
-            return result;
-        }
-
-        internal static int select1(this BitArray array, int k, int start = 0)
-        {
-            int result = array.Cast<bool>().Select((v, i) => new { value = v, index = i })
-                    .Where(item => item.value && item.index >= start)
-                    .Skip(k - 1)
-                    .FirstOrDefault()?.index ?? 0;
-            return result;
-        }
-
         internal static int[] ToBase(this int value, int baseSize, int length = 0)
         {
             var digits = new Stack<int>();

@@ -6,8 +6,6 @@ using k2extensionsLib;
 
 string[] files = new string[]{
     "TestData//btc2019-lu.se_00001.nq.gz",
-    //"TestData//btc2019-drugbank.ca_00001.nq.gz",
-    //"TestData//btc2019-ordnancesurvey.co.uk_00001.nq.gz",
     "TestData//btc2019-uba.de_00001.nq.gz",
     "TestData//btc2019-l3s.de_00001.nq.gz",
 };

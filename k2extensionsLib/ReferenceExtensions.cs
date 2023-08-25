@@ -13,10 +13,22 @@ using System;
 
 namespace k2extensionsLib
 {
+    /// <summary>
+    /// Representation of a k^3 tree
+    /// </summary>
     public class K3 : IK2Extension
     {
+        /// <summary>
+        /// Data
+        /// </summary>
         FlatPopcount _T { get; set; }
+        /// <summary>
+        /// Used k
+        /// </summary>
         readonly int _K;
+        /// <summary>
+        /// Size of the matrix
+        /// </summary>
         int _Size
         {
             get
@@ -167,6 +179,12 @@ namespace k2extensionsLib
             return result;
         }
 
+        /// <summary>
+        /// Builds the pointer-based k^3 tree
+        /// </summary>
+        /// <param name="g">Graph containing the data</param>
+        /// <param name="h">height of the tree</param>
+        /// <returns>Root of the tree</returns>
         private TreeNode _BuildK3(TripleStore g, int h)
         {
             var root = new TreeNode(_K * _K * _K);
@@ -193,6 +211,12 @@ namespace k2extensionsLib
             return root;
         }
 
+        /// <summary>
+        /// Translates a pointer-bases tree to a bitstream
+        /// </summary>
+        /// <param name="node">Current node</param>
+        /// <param name="dynT">Tree as bitstream stored level wise</param>
+        /// <param name="level">Current level</param>
         private void _FindPaths(TreeNode node, ref List<DynamicBitArray> dynT, int level)
         {
             if (level == dynT.Count)
@@ -212,6 +236,13 @@ namespace k2extensionsLib
             dynT[level].AddRange(n, _K * _K * _K);
         }
 
+        /// <summary>
+        /// Calculate the triples of the given search path
+        /// </summary>
+        /// <param name="positionInNodes">Current position in <see cref="T"/></param>
+        /// <param name="searchPath">Search path for traversing the tree</param>
+        /// <param name="parentPath">Path to the current position"/></param>
+        /// <returns>Found triples</returns>
         private Triple[] _FindNodesRec(int positionInNodes, List<(int?, int?, int?)> searchPath, List<(int, int, int)> parentPath)
         {
             var result = new List<Triple>();
@@ -247,6 +278,9 @@ namespace k2extensionsLib
 
     public class MK2 : IK2Extension
     {
+        /// <summary>
+        /// Size of the matrix
+        /// </summary>
         int _Size
         {
             get
@@ -254,7 +288,13 @@ namespace k2extensionsLib
                 return Math.Max(Subjects.Length, Objects.Length);
             }
         }
+        /// <summary>
+        /// Data in form of a dictionary storing a k^2 tree foreach predicate
+        /// </summary>
         Dictionary<INode, K2Tree> _T { get; set; }
+        /// <summary>
+        /// Used k
+        /// </summary>
         int _K { get; set; }
 
         public INode[] Subjects { get; set; }
@@ -396,6 +436,12 @@ namespace k2extensionsLib
             return result;
         }
 
+        /// <summary>
+        /// Calculate the triples of the given search path
+        /// </summary>
+        /// <param name="predicate">Predicate to identify the used k^2 tree</param>
+        /// <param name="searchPath">Search path for traversing the tree</param>
+        /// <returns>Found triples</returns>
         private Triple[] _FindNodes(INode predicate, List<(int?, int?)> searchPath)
         {
             var cells = _T[predicate].FindNodes(0, searchPath, new List<(int, int)>());

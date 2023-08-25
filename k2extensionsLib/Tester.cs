@@ -17,13 +17,21 @@ using VDS.RDF.Shacl.Validation;
 
 namespace k2extensionsLib
 {
+    /// <summary>
+    /// Class for testing an extension
+    /// </summary>
     public class Tester
     {
+        /// <summary>
+        /// Tests extensions using the given data set
+        /// </summary>
+        /// <param name="extensionsUnderTest">Extensions that needs to be tested</param>
+        /// <param name="fileName">Name of the file contianing the data set</param>
+        /// <param name="useK2Triples">Indicates if the extension should use k^2-triples </param>
+        /// <returns>Returns an CSV wih the results</returns>
         public static string TestExtensions(List<IK2Extension> extensionsUnderTest, string fileName, bool useK2Triples)
         {
             Console.WriteLine("Start testing: " + fileName);
-            //IGraph g = new Graph();
-            //g.LoadFromFile(fileName);
             TripleStore g = new ();
             g.LoadFromFile(fileName);
             Console.WriteLine("Graph loaded:");
@@ -43,12 +51,12 @@ namespace k2extensionsLib
             var p = g.Triples.Select(x => x.Predicate).Distinct().ToArray();
             int numberOfTripels = g.Triples.Count();
             Triple[] triples = g.Triples.ToArray();
-            for (int i = 0; i < 50; i++)
+            for (int i = 0; i < 100; i++)
             {
                 testTripels.Add(triples[r.Next(numberOfTripels)]);
             }
             int numberOfSubjects = s.Length, numberOfPredicates = p.Length, numberOfObjects = o.Length;
-            for (int i = 0; i < 150; i++)
+            for (int i = 0; i < 400; i++)
             {
                 testTripels.Add(new Triple(
                     s[r.Next(numberOfSubjects)],
@@ -115,6 +123,10 @@ namespace k2extensionsLib
             return result;
         }
 
+        /// <summary>
+        /// Prints an CSV-table to the console
+        /// </summary>
+        /// <param name="csvString">data in CSV format</param>
         public static void PrintCSVTable(string csvString)
         {
             string[] rows = csvString.Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
@@ -160,6 +172,12 @@ namespace k2extensionsLib
             }
         }
 
+        /// <summary>
+        /// Calculates the correct values for the given triples on the given graph
+        /// </summary>
+        /// <param name="testValues">Test triples</param>
+        /// <param name="graph"></param>
+        /// <returns>Each triple gets a list of lists containing the results for each request type</returns>
         private static List<List<IEnumerable<Triple>>> getCorrectValues(List<Triple> testValues, TripleStore graph)
         {
             var result = new List<List<IEnumerable<Triple>>>();
@@ -180,6 +198,13 @@ namespace k2extensionsLib
             return new List<List<IEnumerable<Triple>>>(result);
         }
 
+        /// <summary>
+        /// Measure the execution time for a method an store the results of the method
+        /// </summary>
+        /// <typeparam name="T">Type of the result</typeparam>
+        /// <param name="result">Container for storing the result</param>
+        /// <param name="method">Method which execution time is measured</param>
+        /// <returns>Elapsed milliseconds for executing the method</returns>
         private static long GetExecutionTime<T>(ref T result, Func<T> method)
         {
             var watch = System.Diagnostics.Stopwatch.StartNew();
@@ -189,6 +214,11 @@ namespace k2extensionsLib
             return (int)elapsedMs;
         }
 
+        /// <summary>
+        /// Measure the execution time for a method that does not return anything
+        /// </summary>
+        /// <param name="method">Method which execution time is measured</param>
+        /// <returns>Elapsed milliseconds for executing the method</returns>
         private static long GetExecutionTime(Action method)
         {
             var watch = System.Diagnostics.Stopwatch.StartNew();

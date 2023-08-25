@@ -12,8 +12,14 @@ using VDS.RDF.Shacl.Validation;
 
 namespace k2extensionsLib
 {
+    /// <summary>
+    /// Base class for the Leaf Rank extension
+    /// </summary>
     public abstract class LeafRank : IK2Extension
     {
+        /// <summary>
+        /// Size of the matrix
+        /// </summary>
         int _Size
         {
             get
@@ -21,9 +27,21 @@ namespace k2extensionsLib
                 return Math.Max(Subjects.Length, Objects.Length);
             }
         }
+        /// <summary>
+        /// Separate data structure
+        /// </summary>
         protected virtual FlatPopcount _Labels { get; set; } = new();
+        /// <summary>
+        /// Stores the number of ones until the last layer
+        /// </summary>
         protected int _RankUntilLeaves { get; set; }
+        /// <summary>
+        /// Data of the k^2 tree
+        /// </summary>
         protected FlatPopcount _T { get; set; } = new();
+        /// <summary>
+        /// Used k
+        /// </summary>
         protected int _K { get; set; }
 
         public INode[] Subjects { get; set; } = Array.Empty<INode>();
@@ -96,7 +114,7 @@ namespace k2extensionsLib
             //buttom-up approach
             var result = new List<Triple>();
             int positionInTypes = Array.IndexOf(Predicates, p);
-            List<int> nodesWithType = _GetNodesWithType(positionInTypes);
+            List<int> nodesWithType = _GetNodesWithPredicate(positionInTypes);
             List<(long, int, int)> cellStore = new();
             foreach (var n in nodesWithType)
             {
@@ -171,14 +189,40 @@ namespace k2extensionsLib
             return result;
         }
 
+        /// <summary>
+        /// Builds and stores the separate data structure
+        /// </summary>
+        /// <param name="labels">List of all labels encoded as bit masks. Each entry belongs to one node pair/one leaf in the tree</param>
         protected abstract void _BuildLabels(List<ulong> labels);
 
+        /// <summary>
+        /// Get all prediactes using the separate datastructure based on a position in the leaves
+        /// </summary>
+        /// <param name="position">Position of the leaf in the bitstream</param>
+        /// <returns>All predicates belonging to the node pair</returns>
         protected abstract INode[] _GetPredicatesFromLeafPosition(int position);
 
+        /// <summary>
+        /// Checks whether a leaf positon (identified by its rank) has a specific predicate
+        /// </summary>
+        /// <param name="rankInLeaves">Rank of the leaf</param>
+        /// <param name="predicate">Position of the predicate in the bit mask</param>
+        /// <returns>True if the predicate exists</returns>
         protected abstract bool _PositionHasPredicate(int rankInLeaves, int predicate);
 
-        protected abstract List<int> _GetNodesWithType(int positionOfType);
+        /// <summary>
+        /// Get the ranks of all node pairs having a specific type/predicate
+        /// </summary>
+        /// <param name="predicate">Position of the predicate in the bit mask</param>
+        /// <returns>List of all ranks having the predicate</returns>
+        protected abstract List<int> _GetNodesWithPredicate(int predicate);
 
+        /// <summary>
+        /// Builds the pointer-based k^2 tree and store the belonging labels at the leaves
+        /// </summary>
+        /// <param name="g">Graph containing the data</param>
+        /// <param name="h">height of the tree</param>
+        /// <returns>Root of the tree</returns>
         private TreeNode _BuildK2Tree(TripleStore g, int h)
         {
             var root = new TreeNode(_K * _K);
@@ -212,17 +256,24 @@ namespace k2extensionsLib
                         label += (ulong)1 << (63 - l);
                     }
                 }
-                currentNode.SetLabel(label);
+                currentNode.Label = label;
             }
 
             return root;
         }
 
+        /// <summary>
+        /// Translates a pointer-bases tree to a bitstream. The labels are stored in parallel
+        /// </summary>
+        /// <param name="node">Current node</param>
+        /// <param name="dynT">Tree as bitstream stored level wise</param>
+        /// <param name="labels">Container that stores the labels as bit mask for each leaf</param>
+        /// <param name="level">Current level</param>
         private void _FindPaths(TreeNode node, ref List<DynamicBitArray> dynT, ref List<ulong> labels, int level)
         {
             if (level == dynT.Count)
             {
-                labels.Add(node.GetLabel());
+                labels.Add(node.Label);
                 return;
             }
             uint n = 0;
@@ -239,7 +290,7 @@ namespace k2extensionsLib
         }
 
         /// <summary>
-        /// Returns the cell-coordinates for a specific position in the leaves 
+        /// Returns the cell-coordinates for a specific position in the leaves TODO!!!
         /// </summary>
         /// <param name="position"></param>
         /// <returns></returns>
@@ -292,6 +343,14 @@ namespace k2extensionsLib
             return new Tuple<int, int>(row, col);
         }
 
+        /// <summary>
+        /// Calculate the triples of the given search path
+        /// </summary>
+        /// <param name="positionInNodes">Current position in <see cref="T"/></param>
+        /// <param name="searchPath">Search path for traversing the tree</param>
+        /// <param name="predicate">Optional position of the predicate in the bit mask. Null, if the request uses an unbounded predicate</param>
+        /// <param name="parentPath">Path to the current position"/></param>
+        /// <returns>Found triples</returns>
         private Triple[] _FindNodesRec(int positionInNodes, List<(int?, int?)> searchPath, int? predicate, List<(int, int)> parentPath)
         {
             var result = new List<Triple>();
@@ -347,7 +406,7 @@ namespace k2extensionsLib
         protected override INode[] _GetPredicatesFromLeafPosition(int position)
         {
             ulong[] l = _Labels[(Predicates.Length * position)..(Predicates.Length * position + Predicates.Length)];
-            var result = _GetPredicatesFromBitStream(l);
+            var result = _GetPredicatesFromBitmask(l);
             return result.ToArray();
         }
 
@@ -357,7 +416,7 @@ namespace k2extensionsLib
             return (labels[0] & (1UL << (63 - predicate))) != 0;
         }
 
-        protected override List<int> _GetNodesWithType(int positionOfType)
+        protected override List<int> _GetNodesWithPredicate(int positionOfType)
         {
             var result = new List<int>();
             int counter = positionOfType;
@@ -371,11 +430,16 @@ namespace k2extensionsLib
             return result;
         }
 
-        private INode[] _GetPredicatesFromBitStream(ulong[] stream)
+        /// <summary>
+        /// Extracts the prediactes from a bitmaks
+        /// </summary>
+        /// <param name="bitmask">Used bit mask</param>
+        /// <returns>Extracted predicates</returns>
+        private INode[] _GetPredicatesFromBitmask(ulong[] bitmask)
         {
             int position = 0;
             var result = new List<INode>();
-            foreach (var block in stream)
+            foreach (var block in bitmask)
             {
                 for (int j = 63; j >= 0; j--)
                 {
@@ -396,6 +460,9 @@ namespace k2extensionsLib
 
     public class LeafRankK2 : LeafRank
     {
+        /// <summary>
+        /// Stores the k^2 tree
+        /// </summary>
         private K2Tree _LabelTree { get; set; } = new(0, 0, 0);
         protected override FlatPopcount _Labels { get => _LabelTree.T; set => _LabelTree.T = value; }
 
@@ -427,7 +494,7 @@ namespace k2extensionsLib
 
         }
 
-        protected override List<int> _GetNodesWithType(int positionOfType)
+        protected override List<int> _GetNodesWithPredicate(int positionOfType)
         {
             List<(int?, int?)> path = (from p in positionOfType.ToBase(_K, _LabelTree._Size.ToBase(_K).Length)
                                        select ((int?)null, (int?)p)).ToList();
@@ -437,6 +504,11 @@ namespace k2extensionsLib
             return result.ToList();
         }
 
+        /// <summary>
+        /// Get the position of existing predicates in a bit mask
+        /// </summary>
+        /// <param name="label">Bit mask</param>
+        /// <returns>Positon of existing predicates</returns>
         private List<int> _ExtractLabelPositions(ulong label)
         {
             ulong mask = 1ul << 63;

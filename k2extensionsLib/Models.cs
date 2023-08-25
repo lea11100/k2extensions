@@ -22,14 +22,38 @@ using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace k2extensionsLib
 {
+    /// <summary>
+    /// Implementation of a k^2 tree
+    /// </summary>
     public class K2Tree
     {
+        /// <summary>
+        /// Used k
+        /// </summary>
         int _K { get; }
+        /// <summary>
+        /// Size of the matrix
+        /// </summary>
         internal int _Size { get { return Math.Max(_Row, _Cols); } }
+        /// <summary>
+        /// Number of rows
+        /// </summary>
         internal int _Row { get; }
+        /// <summary>
+        /// Number of columns
+        /// </summary>
         internal int _Cols { get; }
+        /// <summary>
+        /// Data
+        /// </summary>
         internal FlatPopcount T { get; set; }
 
+        /// <summary>
+        /// Creates empty k^2 tree
+        /// </summary>
+        /// <param name="k">Used k</param>
+        /// <param name="row">Number of rows in adjacency matrix</param>
+        /// <param name="cols">Number of columns adjacency matrix</param>
         public K2Tree(int k, int row, int cols)
         {
             T = new FlatPopcount();
@@ -38,6 +62,10 @@ namespace k2extensionsLib
             _Cols = cols;
         }
 
+        /// <summary>
+        /// Stores given adjacency matrix using a k^2 tree
+        /// </summary>
+        /// <param name="cells">Cell coordinations for cells with value 1</param>
         public void Store(IEnumerable<(int, int)> cells)
         {
             int size = Math.Max(_Row, _Cols);
@@ -78,6 +106,13 @@ namespace k2extensionsLib
             T = new FlatPopcount(flatT);
         }
 
+        /// <summary>
+        /// Calculate those cell coodinates having value one with respect to the given search path
+        /// </summary>
+        /// <param name="positionInNodes">Current position in <see cref="T"/></param>
+        /// <param name="searchPath">Search path for traversing the tree</param>
+        /// <param name="parentPath">Path to the current position"/></param>
+        /// <returns>Found cell coodinates</returns>
         public (int, int)[] FindNodes(int positionInNodes, List<(int?, int?)> searchPath, List<(int, int)> parentPath)
         {
             var result = new List<(int, int)>();
@@ -106,6 +141,12 @@ namespace k2extensionsLib
             return result.ToArray();
         }
 
+        /// <summary>
+        /// Translates a pointer-bases tree to a bitstream
+        /// </summary>
+        /// <param name="node">Current node</param>
+        /// <param name="dynT">Tree as bitstream stored level wise</param>
+        /// <param name="level">Current level</param>
         private void _FindPaths(TreeNode node, ref List<DynamicBitArray> dynT, int level)
         {
             if (level == dynT.Count)
@@ -126,49 +167,81 @@ namespace k2extensionsLib
         }
     }
 
+    /// <summary>
+    /// Class representing a node in a pointer-based tree
+    /// </summary>
     public class TreeNode
     {
+        /// <summary>
+        /// Children of the node
+        /// </summary>
         public TreeNode[] Children { get; set; }
+        /// <summary>
+        /// Optional label of the node. Only used in Leaf Rank
+        /// </summary>
         public ulong Label { get; set; }
 
-
+        /// <summary>
+        /// Creates node with the given number of children
+        /// </summary>
+        /// <param name="children">Number of children</param>
         public TreeNode(int children)
         {
             Children = new TreeNode[children];
         }
 
+        /// <summary>
+        /// Sets a child of the node. If the child alread exists the child is not reset.
+        /// </summary>
+        /// <param name="index">Index of the child that needs to be set</param>
+        /// <param name="child">Value of the child</param>
+        /// <returns>Either the new set child or the existing one</returns>
         public TreeNode SetChild(int index, TreeNode child)
         {
             Children[index] = Children[index] ?? child;
             return Children[index];
         }
 
+        /// <summary>
+        /// Get child at a specific index
+        /// </summary>
+        /// <param name="index">Index of the child</param>
+        /// <returns>Child a the index</returns>
         public TreeNode GetChild(int index)
         {
             return Children[index];
         }
-
-        public ulong GetLabel()
-        {
-            return Label;
-        }
-        public void SetLabel(ulong label)
-        {
-            Label = label;
-        }
-
     }
 
+    /// <summary>
+    /// Class that stores bitstream of a variable length and extend it during runtime
+    /// </summary>
     public class DynamicBitArray
     {
+        /// <summary>
+        /// List storing the data left aligned
+        /// </summary>
         internal List<ulong> data { get; set; } = new List<ulong>() { 0 };
+        /// <summary>
+        /// Index of the last set position in the last piece of data
+        /// </summary>
         internal int lastUsedIndex { get; set; } = -1;
 
+        /// <summary>
+        /// Add a piece of data having the size of 32 bit
+        /// </summary>
+        /// <param name="array">Left aligned data that needs to be add</param>
+        /// <param name="length">Actual length of the data</param>
         public void AddRange(uint array, int length)
         {
             AddRange(((ulong)array) << 32, length);
         }
 
+        /// <summary>
+        /// Add a piece of data having the size of 64 bit
+        /// </summary>
+        /// <param name="array">Left aligned data that needs to be add</param>
+        /// <param name="length">Actual length of the data</param>
         public void AddRange(ulong array, int length)
         {
             ulong firstPart = array >>> (lastUsedIndex + 1);
@@ -188,6 +261,10 @@ namespace k2extensionsLib
             }
         }
 
+        /// <summary>
+        /// Concats with another <see cref="DynamicBitArray"/>
+        /// </summary>
+        /// <param name="array">Other <see cref="DynamicBitArray"/></param>
         public void AddRange(DynamicBitArray array)
         {
             foreach (ulong item in array.data.Take(array.data.Count - 1))
@@ -198,14 +275,30 @@ namespace k2extensionsLib
         }
     }
 
+
+    /// <summary>
+    /// FlatPopcount data structure
+    /// </summary>
     public class FlatPopcount
     {
         //L0-index missing, since optional
 
-        private UInt128[] _L1L2Index { get; set; } //TODO: Maybe use two ulongs instead
+        /// <summary>
+        /// Interleaved L1 and L2 indices
+        /// </summary>
+        private UInt128[] _L1L2Index { get; set; }
+        /// <summary>
+        /// Actual data of the bitstream
+        /// </summary>
         private ulong[] _Data { get; set; }
+        /// <summary>
+        /// Position of every 8192th one
+        /// </summary>
         private long[] _SampelsOfOnePositions { get; set; }
 
+        /// <summary>
+        /// Creates an empty data structure
+        /// </summary>
         public FlatPopcount()
         {
             _Data = Array.Empty<ulong>();
@@ -213,6 +306,10 @@ namespace k2extensionsLib
             _SampelsOfOnePositions = Array.Empty<long>();
         }
 
+        /// <summary>
+        /// Creates the data structure from a <see cref="DynamicBitArray"/>
+        /// </summary>
+        /// <param name="array">Contains the data that needs to be stored</param>
         public FlatPopcount(DynamicBitArray array)
         {
             _Data = array.data.ToArray();
@@ -220,12 +317,19 @@ namespace k2extensionsLib
             _SampelsOfOnePositions = Array.Empty<long>();
             Init();
         }
-      
+
+        /// <summary>
+        /// Size of the datastructure in bits without the overhead
+        /// </summary>
+        /// <returns>Size of the datastructure in bits</returns>
         internal int Length()
         {
             return _Data.Length * 64;
         }
 
+        /// <summary>
+        /// Initiates the L1 and L2 indices and stores the samples of one positions 
+        /// </summary>
         private void Init()
         {
             ulong l1Index = 0;
@@ -246,7 +350,7 @@ namespace k2extensionsLib
                     if ((l2Index + l1Index) >>> 13 != (l2Index + onesInL2 + l1Index) >>> 13)
                     {
                         ulong remainingOnes = ((((l2Index + l1Index) >>> 13) + 1) << 13) - (l2Index + l1Index);
-                        int relativePosition = Select1In512(l2, (int)remainingOnes);
+                        int relativePosition = Select1In512((int)remainingOnes, l2);
                         sampels.Add(i * 4096 + j * 512 + relativePosition);
                     }
                     l2Index += onesInL2;
@@ -257,27 +361,32 @@ namespace k2extensionsLib
                     _L1L2Index[i] += ((UInt128)l2Index) << ((6 - j) * 12);
                     j++;
                 }
-                //_L1L2Index[i] = _InitL1L2(l1Index, l2Indices.SkipLast(1).ToArray());
                 l1Index += l2Index;
                 i++;
             }
             _SampelsOfOnePositions = sampels.ToArray();
         }
 
-        private static int Select1In512(ulong[] array, int nthOne)
+        /// <summary>
+        /// Performs a select_1 query on a 512 bit large bitstream
+        /// </summary>
+        /// <param name="T">Bitstream of size 512 bit</param>
+        /// <param name="n">Rank of the one that needs to be selected</param>
+        /// <returns>Position of the n-th one</returns>
+        private static int Select1In512(int n, ulong[] T)
         {
             int oneCounter = 0;
             int index = 0;
-            foreach (var item in array)
+            foreach (var item in T)
             {
                 int popcnt = BitOperations.PopCount(item);
                 oneCounter += popcnt;
-                if (oneCounter < nthOne)
+                if (oneCounter < n)
                 {
                     index += 64;
                     continue;
                 }
-                int remainingOnes = nthOne - oneCounter + popcnt;
+                int remainingOnes = n - oneCounter + popcnt;
                 ulong mask = 1UL << (popcnt - remainingOnes);
                 ulong pbd = Bmi2.X64.ParallelBitDeposit(mask, item);
                 return index + (int)ulong.LeadingZeroCount(pbd);
@@ -285,6 +394,11 @@ namespace k2extensionsLib
             throw new Exception();
         }
 
+        /// <summary>
+        /// Gets the value of the bit at the given position
+        /// </summary>
+        /// <param name="key">Position</param>
+        /// <returns>Value of the bit</returns>
         internal bool this[int key]
         {
             get
@@ -294,8 +408,13 @@ namespace k2extensionsLib
                 var bit = (_Data[block] & ((ulong)1 << 63 - position)) != 0;
                 return bit;
             }
-        }        
+        }
 
+        /// <summary>
+        /// Gets the left aligned stream of bits in the given range
+        /// </summary>
+        /// <param name="range">Range of positions thats needs to be extracted</param>
+        /// <returns>Left aligned bit stream</returns>
         internal ulong[] this[Range range]
         {
             get
@@ -328,14 +447,19 @@ namespace k2extensionsLib
             }
         }
 
-        internal long Select1(int nthOne)
+        /// <summary>
+        /// Perform a select_1 query on the data
+        /// </summary>
+        /// <param name="n">Rank of the one that needs to be selected</param>
+        /// <returns>Position of the n-th one</returns>
+        internal long Select1(long n)
         {
             //Get L1
-            long position = _SampelsOfOnePositions[nthOne >> 13];
+            long position = _SampelsOfOnePositions[n >> 13];
             int l1 = (int)(position >> 12);
             position = l1 << 12;
-            int remainingOnes = nthOne;
-            while ((l1 + 1) < _L1L2Index.Length && getL1(l1 + 1) < nthOne)
+            long remainingOnes = n;
+            while ((l1 + 1) < _L1L2Index.Length && getL1(l1 + 1) < n)
             {
                 l1++;
                 position += 1L << 12;
@@ -361,26 +485,44 @@ namespace k2extensionsLib
 
             //Get position in L2-Block
             var l2Block = _Data.Skip(l1 * 64 + l2 * 8).Take(8).ToArray();
-            position += Select1In512(l2Block, remainingOnes);
+            position += Select1In512((int)remainingOnes, l2Block);
             return position;
         }
 
-        private int getL1(int position)
+        /// <summary>
+        /// Extract the L1 index from the interleved L1/L2 index a the given position
+        /// </summary>
+        /// <param name="position">Position L1/L2 index in <see cref="_L1L2Index"/></param>
+        /// <returns>Value of L1 index</returns>
+        private long getL1(int position)
         {
             return (int)(_L1L2Index[position] >>> 84);
         }
 
-        internal int Rank1(int position)
+        /// <summary>
+        /// Performs rank_1 query on the data
+        /// </summary>
+        /// <param name="p">Position in the data</param>
+        /// <returns>Rank of the position</returns>
+        internal int Rank1(int p)
         {
-            int block = position / 64;
+            int block = p / 64;
             int l1 = block / 64;
             int l2 = block % 64 / 8;
             int l3 = block % 8;
-            int relativePositionInL3 = position % 64;
+            int relativePositionInL3 = p % 64;
             int result = getRankByBlocks(l1, l2, l3, relativePositionInL3);
             return result;
         }
 
+        /// <summary>
+        /// Calculate the rank based on the given parameters
+        /// </summary>
+        /// <param name="l1">Position of the L1 block</param>
+        /// <param name="l2">Relative position of the L2 block in L1 block</param>
+        /// <param name="l3">Relative position of 64 bit block in L2 block</param>
+        /// <param name="relativePositionInL3">Relative position L3 block</param>
+        /// <returns>Rank of the position</returns>
         private int getRankByBlocks(int l1, int l2, int l3, int relativePositionInL3)
         {
             int result = 0;
@@ -467,8 +609,18 @@ namespace k2extensionsLib
         /// <param name="filename"></param>
     }
 
+    /// <summary>
+    /// Provides general extensions used in the project
+    /// </summary>
     internal static class GeneralExtensions
     {
+        /// <summary>
+        /// Transfroms a decimal number to the k-th base and padds left with zeros if needed to the given length
+        /// </summary>
+        /// <param name="value">Decimal number</param>
+        /// <param name="baseSize">k</param>
+        /// <param name="length">Desired length of the number after transformation. If 0, then the number is not padded</param>
+        /// <returns>Transformed number in form of a list of numbers where each position represents a digit in the k-th base</returns>
         internal static int[] ToBase(this int value, int baseSize, int length = 0)
         {
             var digits = new Stack<int>();
@@ -489,6 +641,12 @@ namespace k2extensionsLib
             return result;
         }
 
+        /// <summary>
+        /// Transforms a number to the k-th base to a decimal number
+        /// </summary>
+        /// <param name="value">Number to the to the k-th base in form of a list of numbers where each position represents a digit in the k-th base</param>
+        /// <param name="baseSize">k</param>
+        /// <returns>Transformed decimal number</returns>
         internal static int FromBase(this IEnumerable<int> value, int baseSize)
         {
             int result = 0;
@@ -501,6 +659,11 @@ namespace k2extensionsLib
             return result;
         }
 
+        /// <summary>
+        /// Sorts a list for tripled using the order S -> O -> P
+        /// </summary>
+        /// <param name="list">List that needs to be sorted</param>
+        /// <returns>Sorted list</returns>
         internal static IEnumerable<Triple> Sort(this IEnumerable<Triple> list)
         {
             return list.OrderBy(t => t.Subject.ToString()).ThenBy(t => t.Object.ToString()).ThenBy(t => t.Predicate.ToString());

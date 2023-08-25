@@ -1,8 +1,11 @@
-﻿// See https://aka.ms/new-console-template for more information
-using VDS.RDF;
+﻿using VDS.RDF;
+
+//Reads size, number of triples, subjects, predicates and objects from a .nq.gz-files
+
+var directory = "D:\\BTC";
 
 var res = "Size;Triples;Subjects;Predicates;Objects\r\n";
-foreach (var f in Directory.GetFiles("D:\\BTC", "*.nq.gz"))
+foreach (var f in Directory.GetFiles(directory, "*.nq.gz"))
 {
     try
     {

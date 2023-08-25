@@ -1,8 +1,6 @@
-﻿// See https://aka.ms/new-console-template for more information
-using k2extensionsLib;
+﻿using k2extensionsLib;
 
-
-
+//Start programm for testing the extensions
 
 string[] files = new string[]{
     "TestData//btc2019-lu.se_00001.nq.gz",

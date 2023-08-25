@@ -290,9 +290,10 @@ namespace k2extensionsLib
         }
 
         /// <summary>
-        /// Returns the cell-coordinates for a specific position in the leaves TODO!!!
+        /// Returns the cell-coordinates for a specific position in the leaves
         /// </summary>
-        /// <param name="position"></param>
+        /// <param name="position">Current position in bit stream</param>
+        /// <param name="cellStore">Container storing positions that were already visited with their (partly) cell coordinates</param>
         /// <returns></returns>
         private Tuple<int, int> _GetCell(long position, ref List<(long,int,int)> cellStore)
         {
